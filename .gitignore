@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+.claude/
+.pytest_cache/
+__pycache__/
+*.pyc
+node_modules/
+react_app/dist/
+data/
+release/
+dist/
+store-toQjXxBt.js
+*.log
+*.tmp

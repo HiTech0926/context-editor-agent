@@ -1,0 +1,115 @@
+﻿{
+  "streams": [
+    {
+      "id": "no_tool",
+      "events": [
+        {
+          "type": "delta",
+          "delta": "The workspace is ready."
+        },
+        {
+          "type": "done",
+          "answer": "The workspace is ready.",
+          "tool_events": [],
+          "blocks": [
+            {
+              "kind": "text",
+              "text": "The workspace is ready."
+            }
+          ],
+          "session": {
+            "id": "contract-session",
+            "title": "Contract session",
+            "scope": "chat",
+            "project_id": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "single_tool",
+      "events": [
+        {
+          "type": "delta",
+          "delta": "I will check that."
+        },
+        {
+          "type": "reset"
+        },
+        {
+          "type": "tool_event",
+          "tool_event": {
+            "name": "shell_command",
+            "arguments": {
+              "command": "pwd"
+            },
+            "output_preview": "C:\\Projects\\hash-code",
+            "raw_output": "C:\\Projects\\hash-code",
+            "display_title": "shell_command",
+            "display_detail": "pwd",
+            "display_result": "C:\\Projects\\hash-code",
+            "status": "completed"
+          }
+        },
+        {
+          "type": "delta",
+          "delta": "The current directory is C:\\Projects\\hash-code."
+        },
+        {
+          "type": "done",
+          "answer": "The current directory is C:\\Projects\\hash-code.",
+          "tool_events": [
+            {
+              "name": "shell_command",
+              "arguments": {
+                "command": "pwd"
+              },
+              "output_preview": "C:\\Projects\\hash-code",
+              "raw_output": "C:\\Projects\\hash-code",
+              "display_title": "shell_command",
+              "display_detail": "pwd",
+              "display_result": "C:\\Projects\\hash-code",
+              "status": "completed"
+            }
+          ],
+          "blocks": [
+            {
+              "kind": "tool",
+              "tool_event": {
+                "name": "shell_command",
+                "arguments": {
+                  "command": "pwd"
+                },
+                "output_preview": "C:\\Projects\\hash-code",
+                "raw_output": "C:\\Projects\\hash-code",
+                "display_title": "shell_command",
+                "display_detail": "pwd",
+                "display_result": "C:\\Projects\\hash-code",
+                "status": "completed"
+              }
+            },
+            {
+              "kind": "text",
+              "text": "The current directory is C:\\Projects\\hash-code."
+            }
+          ],
+          "session": {
+            "id": "contract-session",
+            "title": "Contract session",
+            "scope": "chat",
+            "project_id": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "error",
+      "events": [
+        {
+          "type": "error",
+          "error": "Provider request failed."
+        }
+      ]
+    }
+  ]
+}

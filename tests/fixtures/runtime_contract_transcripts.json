@@ -1,0 +1,123 @@
+﻿{
+  "turns": [
+    {
+      "id": "no_tool",
+      "user_message": "Summarize the workspace status.",
+      "answer": "The workspace is ready.",
+      "tool_events": [],
+      "assistant_blocks": [
+        {
+          "kind": "text",
+          "text": "The workspace is ready."
+        }
+      ]
+    },
+    {
+      "id": "single_tool",
+      "user_message": "Check the current directory.",
+      "answer": "The current directory is C:\\Projects\\hash-code.",
+      "tool_events": [
+        {
+          "name": "shell_command",
+          "arguments": {
+            "command": "pwd"
+          },
+          "output_preview": "C:\\Projects\\hash-code",
+          "raw_output": "C:\\Projects\\hash-code",
+          "display_title": "shell_command",
+          "display_detail": "pwd",
+          "display_result": "C:\\Projects\\hash-code",
+          "status": "completed"
+        }
+      ],
+      "assistant_blocks": [
+        {
+          "kind": "tool",
+          "tool_event": {
+            "name": "shell_command",
+            "arguments": {
+              "command": "pwd"
+            },
+            "output_preview": "C:\\Projects\\hash-code",
+            "raw_output": "C:\\Projects\\hash-code",
+            "display_title": "shell_command",
+            "display_detail": "pwd",
+            "display_result": "C:\\Projects\\hash-code",
+            "status": "completed"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "The current directory is C:\\Projects\\hash-code."
+        }
+      ]
+    },
+    {
+      "id": "multi_tool",
+      "user_message": "List files and then inspect package metadata.",
+      "answer": "The project has package metadata and a Python web server.",
+      "tool_events": [
+        {
+          "name": "shell_command",
+          "arguments": {
+            "command": "rg --files"
+          },
+          "output_preview": "web_server.py\npackage.json\nrequirements.txt",
+          "raw_output": "web_server.py\npackage.json\nrequirements.txt",
+          "display_title": "shell_command",
+          "display_detail": "rg --files",
+          "display_result": "Found project files.",
+          "status": "completed"
+        },
+        {
+          "name": "read_file",
+          "arguments": {
+            "path": "package.json"
+          },
+          "output_preview": "{\"name\":\"hash-code-desktop\"}",
+          "raw_output": "{\"name\":\"hash-code-desktop\",\"private\":true}",
+          "display_title": "read_file",
+          "display_detail": "package.json",
+          "display_result": "Read package metadata.",
+          "status": "completed"
+        }
+      ],
+      "assistant_blocks": [
+        {
+          "kind": "tool",
+          "tool_event": {
+            "name": "shell_command",
+            "arguments": {
+              "command": "rg --files"
+            },
+            "output_preview": "web_server.py\npackage.json\nrequirements.txt",
+            "raw_output": "web_server.py\npackage.json\nrequirements.txt",
+            "display_title": "shell_command",
+            "display_detail": "rg --files",
+            "display_result": "Found project files.",
+            "status": "completed"
+          }
+        },
+        {
+          "kind": "tool",
+          "tool_event": {
+            "name": "read_file",
+            "arguments": {
+              "path": "package.json"
+            },
+            "output_preview": "{\"name\":\"hash-code-desktop\"}",
+            "raw_output": "{\"name\":\"hash-code-desktop\",\"private\":true}",
+            "display_title": "read_file",
+            "display_detail": "package.json",
+            "display_result": "Read package metadata.",
+            "status": "completed"
+          }
+        },
+        {
+          "kind": "text",
+          "text": "The project has package metadata and a Python web server."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "name": "hash-code-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A context-first desktop shell for the hashcode agent.",
+  "author": "hashcode",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe web_server.py) else (python web_server.py)",
+    "start:web": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe web_server.py) else (python web_server.py)",
+    "start:cli": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe main.py) else (python main.py)",
+    "dev:electron": "npm run build:react && electron .",
+    "start:electron": "npm run build:react && electron .",
+    "dev:react": "vite --config react_app/vite.config.ts",
+    "typecheck": "tsc -p react_app/tsconfig.json --noEmit",
+    "build:react": "vite build --config react_app/vite.config.ts",
+    "preview:react": "vite preview --config react_app/vite.config.ts",
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win --x64"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "js-tiktoken": "^1.0.21",
+    "mermaid": "^11.12.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-github-blockquote-alert": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "^37.10.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  },
+    "build": {
+    "appId": "com.hashcode.desktop",
+    "productName": "hashcode",
+    "asar": false,
+    "afterPack": "build/patch-win-icon.js",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "web_server.py",
+      "main.py",
+      "hash.html",
+      "requirements.txt",
+      ".env.example",
+      ".venv/**/*",
+      "static/**/*",
+      "react_app/dist/**/*",
+      "simple_agent/**/*",
+      "agent_runtime/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "electron/assets/hash-icon.ico",
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/assets/hash-icon.ico",
+      "uninstallerIcon": "electron/assets/hash-icon.ico"
+    }
+  }
+}
