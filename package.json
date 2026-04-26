@@ -9,12 +9,15 @@
     "start": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe web_server.py) else (python web_server.py)",
     "start:web": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe web_server.py) else (python web_server.py)",
     "start:cli": "if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe main.py) else (python main.py)",
+    "dev": "npm run dev:electron",
     "dev:electron": "npm run build:react && electron .",
     "start:electron": "npm run build:react && electron .",
     "dev:react": "vite --config react_app/vite.config.ts",
     "typecheck": "tsc -p react_app/tsconfig.json --noEmit",
+    "build": "npm run build:react",
     "build:react": "vite build --config react_app/vite.config.ts",
     "preview:react": "vite preview --config react_app/vite.config.ts",
+    "dist": "npm run dist:win",
     "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win --x64"
   },
   "dependencies": {
