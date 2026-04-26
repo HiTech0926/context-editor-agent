@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="docs/images/hash-icon.png" alt="hashcode" width="128" />
 </p>
 
@@ -68,6 +68,10 @@ Cursor:     AI  →  编辑  →  代码
 
 ### 📍 上下文地图 — 看到模型吃进去的一切
 
+<p align="center">
+  <img src="docs/images/screenshot-context-map.png" alt="上下文地图" width="800" />
+</p>
+
 右侧边栏把原始对话记录变成一张结构化、可滚动的地图：
 
 - **编号节点** — `#1 #2 #3 ...` — 每一轮用户/助手对话就是一个节点
@@ -77,6 +81,14 @@ Cursor:     AI  →  编辑  →  代码
 - **多选** — `Ctrl+点击` 或在编号栏拖动来批量选中节点，供 AI 编辑器操作
 
 ### 🪆 上下文工作台 — AI 编辑 AI 的上下文
+
+<p align="center">
+  <img src="docs/images/screenshot-workbench-1.png" alt="workbench-manual" width="800" />
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-workbench-2.png" alt="workbench-suggest" width="800" />
+</p>
 
 右侧面板是第二个 AI 模型的操作台，包含四个页面：
 

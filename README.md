@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="docs/images/hash-icon.png" alt="hashcode" width="128" />
 </p>
 
@@ -68,6 +68,9 @@ One AI doing the thinking. Another AI grooming what the first one sees. 🪆
 
 ### 📍 Context Map — See Everything Your Model Sees
 
+![context-map](docs/images_en/screenshot-context-map.png)
+
+
 The right sidebar turns the raw transcript into a structured, scrollable map:
 
 - **Numbered nodes** — `#1 #2 #3 ...` — each user/assistant turn is one node
@@ -77,6 +80,10 @@ The right sidebar turns the raw transcript into a structured, scrollable map:
 - **Multi-select** — `Ctrl+Click` or drag the gutter to select nodes for the AI editor
 
 ### 🪆 Context Workbench — AI Editing AI's Context
+
+![workbench-suggest](docs/images_en/screenshot-workbench-2.png)
+
+![workbench-manual](docs/images_en/screenshot-workbench-1.png)
 
 The right panel is the command center for the second AI model, with four tabs:
 
