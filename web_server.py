@@ -115,6 +115,7 @@ class SessionState:
     project_id: str | None
     agent: SimpleAgent
     transcript: list[dict[str, object]]
+    context_input: list[dict[str, object]]
     context_workbench_history: list[dict[str, str]]
     context_revisions: list[dict[str, object]]
     pending_context_restore: dict[str, object] | None
@@ -258,10 +259,12 @@ class AppState:
                 project_id=target_project_id,
                 agent=SimpleAgent(self._settings_for_project_locked(target_project_id)),
                 transcript=[],
+                context_input=[],
                 context_workbench_history=[],
                 context_revisions=[],
                 pending_context_restore=None,
             )
+            session.context_input = provider_input_to_context_records(session.agent.request_input_snapshot())
             ensure_initial_context_revision(session)
             self.sessions[session.session_id] = session
             self._insert_session_locked(session)
@@ -767,6 +770,7 @@ class AppState:
                 "projects": self._projects_payload_locked(),
                 "chat_sessions": self._chat_sessions_payload_locked(),
                 "conversations": self._conversation_map_locked(),
+                "context_inputs": self._context_input_map_locked(),
                 "context_workbench_histories": self._context_workbench_history_map_locked(),
                 "context_revision_histories": self._context_revision_map_locked(),
                 "pending_context_restores": self._pending_context_restore_map_locked(),
@@ -843,6 +847,7 @@ class AppState:
                     project_id=project_id if scope == "project" else None,
                     agent=SimpleAgent(self._settings_for_project_locked(project_id if scope == "project" else None)),
                     transcript=transcript,
+                    context_input=[],
                     context_workbench_history=normalize_context_chat_history(item.get("context_workbench_history")),
                     context_revisions=normalize_context_revision_entries(item.get("context_revisions")),
                     pending_context_restore=normalize_pending_context_restore(item.get("pending_context_restore")),
@@ -1038,6 +1043,12 @@ class AppState:
             for session_id, session in self.sessions.items()
         }
 
+    def _context_input_map_locked(self) -> dict[str, list[dict[str, object]]]:
+        return {
+            session_id: sanitize_value(session.context_input)
+            for session_id, session in self.sessions.items()
+        }
+
     def _insert_session_locked(self, session: SessionState) -> None:
         if session.scope == "project":
             project = self._find_project_locked(session.project_id) or self._ensure_default_project_locked()
@@ -1125,6 +1136,16 @@ class AppState:
                 record_index=record_index,
             )
             session.agent.history.extend(provider_items)
+        session.context_input = provider_input_to_context_records(session.agent.request_input_snapshot())
+
+    def update_session_context_input(
+        self,
+        session: SessionState,
+        input_items: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        with self.lock:
+            session.context_input = provider_input_to_context_records(input_items)
+            return sanitize_value(session.context_input)
 
 
 def summarize_title(message: str) -> str:
@@ -1563,6 +1584,155 @@ def normalize_provider_items(raw_items: Any) -> list[dict[str, Any]]:
             )
 
     return normalized
+
+
+def sanitize_provider_input_item(raw_item: Any) -> dict[str, Any] | None:
+    if not isinstance(raw_item, dict):
+        return None
+
+    safe_item = sanitize_value(raw_item)
+    return safe_item if isinstance(safe_item, dict) else None
+
+
+def provider_input_item_text(item: dict[str, Any]) -> str:
+    item_type = sanitize_text(item.get("type") or "").strip()
+    if item_type == "message":
+        return extract_text_from_provider_message_content(item.get("content"))
+
+    if item_type == "function_call":
+        name = sanitize_text(item.get("name") or "").strip() or "tool"
+        arguments = sanitize_text(item.get("arguments") or "{}").strip() or "{}"
+        return f"{name}({arguments})"
+
+    if item_type == "function_call_output":
+        return sanitize_text(item.get("output") or "")
+
+    if item_type in {"compaction", "compaction_summary"}:
+        for key in ("summary", "content", "text"):
+            text = sanitize_text(item.get(key) or "").strip()
+            if text:
+                return text
+
+    if item_type == "reasoning":
+        for key in ("summary", "content", "text"):
+            text = sanitize_text(item.get(key) or "").strip()
+            if text:
+                return text
+
+    return json.dumps(item, ensure_ascii=False)
+
+
+def input_context_record(
+    *,
+    role: str,
+    text: str,
+    provider_items: list[dict[str, Any]],
+    blocks: list[dict[str, object]] | None = None,
+    tool_events: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    safe_text = sanitize_text(text)
+    safe_blocks = normalize_message_blocks(blocks)
+    safe_tool_events = sanitize_value(tool_events or [])
+    if not safe_blocks:
+        safe_blocks = blocks_from_text_and_tools(
+            "assistant" if role == "assistant" else "user",
+            safe_text,
+            safe_tool_events if isinstance(safe_tool_events, list) else [],
+        )
+    return {
+        "role": sanitize_text(role).strip() or "context",
+        "text": safe_text,
+        "attachments": [],
+        "toolEvents": safe_tool_events if isinstance(safe_tool_events, list) else [],
+        "blocks": safe_blocks,
+        "providerItems": sanitize_value(provider_items),
+    }
+
+
+def provider_input_to_context_records(raw_items: Any) -> list[dict[str, object]]:
+    if not isinstance(raw_items, list):
+        return []
+
+    records: list[dict[str, object]] = []
+    assistant_items: list[dict[str, Any]] = []
+
+    def flush_assistant_items() -> None:
+        if not assistant_items:
+            return
+
+        compiled = compile_record_from_provider_items(
+            {"role": "assistant", "attachments": []},
+            normalize_provider_items(assistant_items),
+        )
+        text = sanitize_text(compiled.get("text") or "").strip()
+        if not text:
+            text = "\n\n".join(
+                part
+                for part in (provider_input_item_text(item) for item in assistant_items)
+                if part.strip()
+            )
+        records.append(
+            input_context_record(
+                role="assistant",
+                text=text,
+                provider_items=list(assistant_items),
+                blocks=normalize_message_blocks(compiled.get("blocks")),
+                tool_events=sanitize_value(compiled.get("toolEvents"))
+                if isinstance(compiled.get("toolEvents"), list)
+                else [],
+            )
+        )
+        assistant_items.clear()
+
+    for raw_item in raw_items:
+        item = sanitize_provider_input_item(raw_item)
+        if item is None:
+            continue
+
+        item_type = sanitize_text(item.get("type") or "").strip()
+        role = sanitize_text(item.get("role") or "").strip()
+        is_assistant_protocol_item = (
+            (item_type == "message" and role == "assistant")
+            or item_type in {"function_call", "function_call_output", "reasoning"}
+        )
+
+        if is_assistant_protocol_item:
+            assistant_items.append(item)
+            continue
+
+        flush_assistant_items()
+
+        if item_type == "message" and role in {"system", "developer", "user"}:
+            text = provider_input_item_text(item)
+            records.append(
+                input_context_record(
+                    role=role,
+                    text=text,
+                    provider_items=[item],
+                )
+            )
+            continue
+
+        if item_type in {"compaction", "compaction_summary"}:
+            records.append(
+                input_context_record(
+                    role="compaction",
+                    text=provider_input_item_text(item),
+                    provider_items=[item],
+                )
+            )
+            continue
+
+        records.append(
+            input_context_record(
+                role="context",
+                text=provider_input_item_text(item),
+                provider_items=[item],
+            )
+        )
+
+    flush_assistant_items()
+    return records
 
 
 def build_provider_items_for_record(
@@ -4697,6 +4867,7 @@ def build_context_chat_response_payload(
         "used_model": used_model,
         "history": history,
         "conversation": conversation,
+        "context_input": sanitize_value(session.context_input),
         "revisions": revisions,
         "pending_restore": pending_restore,
     }
@@ -5191,6 +5362,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "session": self.app_state.session_payload(session),
+                        "context_input": sanitize_value(session.context_input),
                         **self.app_state.sidebar_payload(),
                     },
                     status=HTTPStatus.CREATED,
@@ -5203,6 +5375,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {
                         "session": self.app_state.session_payload(session),
+                        "context_input": sanitize_value(session.context_input),
                         **self.app_state.sidebar_payload(),
                     }
                 )
@@ -5221,6 +5394,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     {
                         "session": self.app_state.session_payload(session),
                         "conversation": sanitize_value(session.transcript),
+                        "context_input": sanitize_value(session.context_input),
                         **self.app_state.sidebar_payload(),
                     }
                 )
@@ -5242,6 +5416,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                         {
                             "session": self.app_state.session_payload(session),
                             "conversation": sanitize_value(session.transcript),
+                            "context_input": sanitize_value(session.context_input),
                             **self.app_state.sidebar_payload(),
                         }
                     )
@@ -5630,6 +5805,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(
                         {
                             "conversation": conversation,
+                            "context_input": sanitize_value(session.context_input),
                             "history": history,
                             "revisions": revisions,
                             "pending_restore": pending_restore,
@@ -5656,6 +5832,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(
                         {
                             "conversation": conversation,
+                            "context_input": sanitize_value(session.context_input),
                             "history": history,
                             "revisions": revisions,
                             "pending_restore": pending_restore,
@@ -5675,6 +5852,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(
                         {
                             "conversation": conversation,
+                            "context_input": sanitize_value(session.context_input),
                             "history": history,
                             "revisions": revisions,
                             "pending_restore": pending_restore,
@@ -5692,6 +5870,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(
                         {
                             "conversation": conversation,
+                            "context_input": sanitize_value(session.context_input),
                             "history": history,
                             "revisions": revisions,
                             "pending_restore": pending_restore,
@@ -5898,6 +6077,16 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     think_parser.finish()
                     self._write_stream_event({"type": "reset"})
 
+                def handle_request_input(input_items: list[dict[str, Any]], _request: dict[str, Any]) -> None:
+                    raise_if_cancelled()
+                    context_input = self.app_state.update_session_context_input(session, input_items)
+                    self._write_stream_event(
+                        {
+                            "type": "context_input",
+                            "conversation": context_input,
+                        }
+                    )
+
                 try:
                     answer, tool_events = session.agent.run_turn(
                         message,
@@ -5912,6 +6101,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                         on_model_done=handle_model_done,
                         on_round_reset=handle_round_reset,
                         on_tool_event=handle_tool_event,
+                        on_request_input=handle_request_input,
                         check_cancelled=raise_if_cancelled,
                     )
                     raise_if_cancelled()
@@ -5944,6 +6134,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                             "tool_events": tool_events_payload,
                             "blocks": assistant_blocks,
                             "session": self.app_state.session_payload(session),
+                            "context_input": sanitize_value(session.context_input),
                             **self.app_state.sidebar_payload(),
                         }
                     )
@@ -5984,12 +6175,16 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                         title_seed,
                         model=model,
                     )
+                def handle_request_input(input_items: list[dict[str, Any]], _request: dict[str, Any]) -> None:
+                    self.app_state.update_session_context_input(session, input_items)
+
                 try:
                     answer, tool_events = session.agent.run_turn(
                         message,
                         attachments=agent_attachments,
                         model=model,
                         reasoning_effort=reasoning_effort,
+                        on_request_input=handle_request_input,
                     )
                     tool_events_payload = [serialize_tool_event(event) for event in tool_events]
                     assistant_blocks = blocks_from_text_and_tools(
@@ -6014,6 +6209,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                             "tool_events": tool_events_payload,
                             "blocks": assistant_blocks,
                             "session": self.app_state.session_payload(session),
+                            "context_input": sanitize_value(session.context_input),
                             **self.app_state.sidebar_payload(),
                         }
                     )

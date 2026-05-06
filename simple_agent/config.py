@@ -160,6 +160,18 @@ def _clean_string(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _stored_editable_text(stored: dict[str, Any], key: str, fallback: str) -> str:
+    if key not in stored or stored.get(key) is None:
+        return fallback
+    return _clean_string(stored.get(key))
+
+
+def _stored_provider_base_url(stored: dict[str, Any], key: str, provider_type: str, fallback: str) -> str:
+    if key not in stored or stored.get(key) is None:
+        return fallback
+    return _normalize_provider_api_base_url(stored.get(key), provider_type)
+
+
 def _read_settings_file() -> dict[str, Any]:
     candidates = [SETTINGS_FILE]
     allow_legacy_settings = os.getenv("HASH_ALLOW_LEGACY_SETTINGS", "1").strip().lower()
@@ -313,26 +325,27 @@ def _normalize_provider_records(
         raw = raw_by_id.get(provider_id, {})
         provider_type = _normalize_provider_type(raw.get("provider_type") or spec.get("provider_type"), provider_id)
         type_defaults = _provider_type_defaults(provider_type)
-        name = _clean_string(raw.get("name")) or _clean_string(spec.get("name")) or type_defaults["name"]
-        base_url = _normalize_provider_api_base_url(raw.get("api_base_url"), provider_type)
+        has_base_url = "api_base_url" in raw and raw.get("api_base_url") is not None
+        name = _stored_editable_text(raw, "name", _clean_string(spec.get("name")) or type_defaults["name"])
+        base_url = _stored_provider_base_url(raw, "api_base_url", provider_type, "")
         default_model = _clean_string(raw.get("default_model"))
         api_key = _clean_string(raw.get("api_key"))
 
         if provider_id == "openai":
-            base_url = (
-                base_url
-                or _normalize_provider_api_base_url(fallback_base_url, provider_type)
-                or _normalize_provider_api_base_url(spec.get("api_base_url"), provider_type)
-                or type_defaults["api_base_url"]
-            )
+            if not has_base_url:
+                base_url = (
+                    _normalize_provider_api_base_url(fallback_base_url, provider_type)
+                    or _normalize_provider_api_base_url(spec.get("api_base_url"), provider_type)
+                    or type_defaults["api_base_url"]
+                )
             default_model = default_model or fallback_model or _clean_string(spec.get("default_model")) or type_defaults["default_model"]
             api_key = api_key or fallback_api_key
         else:
-            base_url = (
-                base_url
-                or _normalize_provider_api_base_url(spec.get("api_base_url"), provider_type)
-                or type_defaults["api_base_url"]
-            )
+            if not has_base_url:
+                base_url = (
+                    _normalize_provider_api_base_url(spec.get("api_base_url"), provider_type)
+                    or type_defaults["api_base_url"]
+                )
             default_model = default_model or _clean_string(spec.get("default_model")) or type_defaults["default_model"] or fallback_model
 
         enabled_value = raw.get("enabled")
@@ -358,8 +371,8 @@ def _normalize_provider_records(
             continue
         provider_type = _normalize_provider_type(raw.get("provider_type"), provider_id)
         type_defaults = _provider_type_defaults(provider_type)
-        name = _clean_string(raw.get("name")) or provider_id
-        base_url = _normalize_provider_api_base_url(raw.get("api_base_url"), provider_type) or type_defaults["api_base_url"]
+        name = _stored_editable_text(raw, "name", provider_id)
+        base_url = _stored_provider_base_url(raw, "api_base_url", provider_type, type_defaults["api_base_url"])
         default_model = _clean_string(raw.get("default_model")) or type_defaults["default_model"] or fallback_model
         api_key = _clean_string(raw.get("api_key"))
 
@@ -595,7 +608,7 @@ def load_settings() -> Settings:
         response_providers[0],
     )
     model = _clean_string(active_provider.get("default_model")) or model
-    openai_base_url = _clean_string(active_provider.get("api_base_url")) or None
+    openai_base_url = _clean_string(active_provider.get("api_base_url"))
     openai_api_key = _clean_string(active_provider.get("api_key")) or None
     context_workbench_provider_id = _normalize_active_provider_id(
         _find_provider_id_for_model(context_workbench_model, response_providers)
@@ -605,17 +618,17 @@ def load_settings() -> Settings:
     )
     tool_settings = normalize_tool_settings(stored.get("tool_settings"))
 
-    assistant_name = _clean_string(stored.get("assistant_name")) or DEFAULT_ASSISTANT_NAME
-    assistant_greeting = _clean_string(stored.get("assistant_greeting")) or DEFAULT_ASSISTANT_GREETING
-    assistant_prompt = _clean_string(stored.get("assistant_prompt")) or DEFAULT_ASSISTANT_PROMPT
+    assistant_name = _stored_editable_text(stored, "assistant_name", DEFAULT_ASSISTANT_NAME)
+    assistant_greeting = _stored_editable_text(stored, "assistant_greeting", DEFAULT_ASSISTANT_GREETING)
+    assistant_prompt = _stored_editable_text(stored, "assistant_prompt", DEFAULT_ASSISTANT_PROMPT)
     temperature = _normalize_optional_float(stored.get("temperature"), min_value=0, max_value=2)
     top_p = _normalize_optional_float(stored.get("top_p"), min_value=0, max_value=1)
     context_message_limit = _normalize_optional_int(stored.get("context_message_limit"), min_value=1)
     streaming = bool(stored.get("streaming", True))
-    user_name = _clean_string(stored.get("user_name")) or DEFAULT_USER_NAME
+    user_name = _stored_editable_text(stored, "user_name", DEFAULT_USER_NAME)
     user_locale = _clean_string(stored.get("user_locale")) or DEFAULT_USER_LOCALE
-    user_timezone = _clean_string(stored.get("user_timezone")) or DEFAULT_USER_TIMEZONE
-    user_profile = _clean_string(stored.get("user_profile")) or DEFAULT_USER_PROFILE
+    user_timezone = _stored_editable_text(stored, "user_timezone", DEFAULT_USER_TIMEZONE)
+    user_profile = _stored_editable_text(stored, "user_profile", DEFAULT_USER_PROFILE)
     theme_color = _normalize_theme_color(stored.get("theme_color"))
     theme_mode = _normalize_theme_mode(stored.get("theme_mode"))
     background_color = _normalize_hex_color(stored.get("background_color"), DEFAULT_BACKGROUND_COLOR)
@@ -752,7 +765,7 @@ def save_settings(
             type_defaults = _provider_type_defaults(provider_type)
             current_by_id[provider_id] = {
                 "id": provider_id,
-                "name": _clean_string(incoming.get("name")) or provider_id,
+                "name": _stored_editable_text(incoming, "name", provider_id),
                 "provider_type": provider_type,
                 "enabled": bool(incoming.get("enabled")) if incoming.get("enabled") is not None else True,
                 "supports_model_fetch": True,
@@ -770,7 +783,7 @@ def save_settings(
                 continue
 
             if "name" in incoming:
-                provider["name"] = _clean_string(incoming.get("name")) or provider_id
+                provider["name"] = _clean_string(incoming.get("name"))
 
             if "provider_type" in incoming:
                 provider_type = _normalize_provider_type(incoming.get("provider_type"), provider_id)
@@ -787,11 +800,7 @@ def save_settings(
                     incoming.get("api_base_url"),
                     provider_type,
                 )
-                provider["api_base_url"] = (
-                    cleaned_base_url
-                    or _clean_string(_provider_spec(provider_id).get("api_base_url"))
-                    or _provider_type_defaults(provider_type)["api_base_url"]
-                )
+                provider["api_base_url"] = cleaned_base_url
 
             if "default_model" in incoming:
                 cleaned_model = _clean_string(incoming.get("default_model"))
@@ -831,7 +840,7 @@ def save_settings(
             openai_base_url,
             active_provider_type,
         )
-        active_provider["api_base_url"] = cleaned_base_url or _clean_string(_provider_spec(next_active_provider_id).get("api_base_url"))
+        active_provider["api_base_url"] = cleaned_base_url
 
     if clear_api_key:
         active_provider.pop("api_key", None)
@@ -896,7 +905,7 @@ def save_settings(
         current["max_tool_rounds"] = max(1, int(max_tool_rounds))
 
     if assistant_name is not None:
-        current["assistant_name"] = _clean_string(assistant_name) or DEFAULT_ASSISTANT_NAME
+        current["assistant_name"] = _clean_string(assistant_name)
     if assistant_greeting is not None:
         current["assistant_greeting"] = _clean_string(assistant_greeting)
     if assistant_prompt is not None:
@@ -911,11 +920,11 @@ def save_settings(
     if streaming is not None:
         current["streaming"] = bool(streaming)
     if user_name is not None:
-        current["user_name"] = _clean_string(user_name) or DEFAULT_USER_NAME
+        current["user_name"] = _clean_string(user_name)
     if user_locale is not None:
         current["user_locale"] = _clean_string(user_locale) or DEFAULT_USER_LOCALE
     if user_timezone is not None:
-        current["user_timezone"] = _clean_string(user_timezone) or DEFAULT_USER_TIMEZONE
+        current["user_timezone"] = _clean_string(user_timezone)
     if user_profile is not None:
         current["user_profile"] = _clean_string(user_profile)
     if theme_color is not None:

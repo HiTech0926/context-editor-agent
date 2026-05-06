@@ -50,7 +50,7 @@ PROVIDER_RAW_PAYLOAD_KEYS = {
 
 
 def load_fixture(name: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8-sig"))
 
 
 class InMemoryAppState(AppState):
@@ -76,6 +76,7 @@ def make_session() -> SessionState:
         project_id=None,
         agent=SimpleNamespace(),
         transcript=[],
+        context_input=[],
         context_workbench_history=[],
         context_revisions=[],
         pending_context_restore=None,

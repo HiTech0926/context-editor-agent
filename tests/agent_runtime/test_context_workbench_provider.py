@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def make_settings(*, context_provider_id: str = "openai") -> Settings:
     return Settings(
         model="gpt-5.4",
+        default_reasoning_effort="medium",
         context_workbench_model="gemini-3-flash-preview",
         context_workbench_provider_id=context_provider_id,
         project_root=ROOT,

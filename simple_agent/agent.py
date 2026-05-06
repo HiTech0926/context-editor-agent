@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 
 from agent_runtime.adapters import (
@@ -57,7 +57,9 @@ _TEXT_PART_TYPES = {"", "text", "input_text", "output_text"}
 _IMAGE_PART_TYPES = {"input_image", "image_url"}
 _NON_RESPONSE_ALLOWED_PARTS = {
     _CHAT_PROVIDER_TYPE: _TEXT_PART_TYPES | _IMAGE_PART_TYPES,
-    _CLAUDE_PROVIDER_TYPE: _TEXT_PART_TYPES | _IMAGE_PART_TYPES,
+    _CLAUDE_PROVIDER_TYPE: _TEXT_PART_TYPES
+    | _IMAGE_PART_TYPES
+    | {"image", "thinking", "redacted_thinking", "tool_use", "tool_result"},
     _GEMINI_PROVIDER_TYPE: _TEXT_PART_TYPES,
 }
 
@@ -70,6 +72,8 @@ def sanitize_text(value: Any) -> str:
 
 
 def sanitize_value(value: Any) -> Any:
+    if is_dataclass(value) and not isinstance(value, type):
+        return sanitize_value(asdict(value))
     if isinstance(value, str):
         return sanitize_text(value)
     if isinstance(value, list):
@@ -105,6 +109,7 @@ class SimpleAgent:
         self.history: list[dict[str, Any]] = []
         self.context_role = "developer"
         self.instructions = self._build_instructions() if include_default_instructions else ""
+        self._request_input_observer: Callable[[list[dict[str, Any]], dict[str, Any]], None] | None = None
         self.adapter = self._build_adapter()
 
     def _build_instructions(self) -> str:
@@ -240,6 +245,7 @@ class SimpleAgent:
         on_model_done: Callable[[], None] | None = None,
         on_round_reset: Callable[[], None] | None = None,
         on_tool_event: Callable[[ToolEvent], None] | None = None,
+        on_request_input: Callable[[list[dict[str, Any]], dict[str, Any]], None] | None = None,
         check_cancelled: Callable[[], None] | None = None,
     ) -> tuple[str, list[ToolEvent]]:
         core: AgentCore[ToolEvent] = AgentCore(
@@ -259,20 +265,25 @@ class SimpleAgent:
             fallback_to_developer=self._fallback_to_developer_context,
             check_cancelled=check_cancelled,
         )
-        return core.run_turn(
-            user_message,
-            attachments=attachments,
-            model=model,
-            reasoning_effort=reasoning_effort,
-            on_text_delta=on_text_delta,
-            on_reasoning_start=on_reasoning_start,
-            on_reasoning_delta=on_reasoning_delta,
-            on_reasoning_done=on_reasoning_done,
-            on_model_start=on_model_start,
-            on_model_done=on_model_done,
-            on_round_reset=on_round_reset,
-            on_tool_event=on_tool_event,
-        )
+        previous_observer = self._request_input_observer
+        self._request_input_observer = on_request_input
+        try:
+            return core.run_turn(
+                user_message,
+                attachments=attachments,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                on_text_delta=on_text_delta,
+                on_reasoning_start=on_reasoning_start,
+                on_reasoning_delta=on_reasoning_delta,
+                on_reasoning_done=on_reasoning_done,
+                on_model_start=on_model_start,
+                on_model_done=on_model_done,
+                on_round_reset=on_round_reset,
+                on_tool_event=on_tool_event,
+            )
+        finally:
+            self._request_input_observer = previous_observer
 
     def _build_provider_client(self) -> Any:
         if self.provider_type == _CLAUDE_PROVIDER_TYPE:
@@ -364,6 +375,7 @@ class SimpleAgent:
     ) -> StreamResult:
         output_chunks: list[str] = []
         function_calls: list[BridgedFunctionCall] = []
+        canonical_items: list[Any] = []
         final_output_text = ""
         finish_reason: str | None = None
 
@@ -410,6 +422,7 @@ class SimpleAgent:
             if isinstance(event, ProviderDoneEvent):
                 final_output_text = sanitize_text(event.output_text)
                 finish_reason = getattr(event, "finish_reason", None)
+                canonical_items = list(sanitize_value(event.canonical_items or ()))
 
         output_text = "".join(output_chunks) or final_output_text
         if not output_chunks and final_output_text and on_text_delta is not None:
@@ -419,6 +432,7 @@ class SimpleAgent:
             output_text=output_text,
             function_calls=function_calls,
             finish_reason=finish_reason,
+            canonical_items=canonical_items,
         )
 
     def _request_input(self, turn_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -441,7 +455,24 @@ class SimpleAgent:
             request_model=request_model,
             request_reasoning_effort=request_reasoning_effort,
         )
-        return self.adapter.build_request(context)
+        request = self.adapter.build_request(context)
+        self._notify_request_input(request)
+        return request
+
+    def request_input_snapshot(self) -> list[dict[str, Any]]:
+        return self._request_input([])
+
+    def _notify_request_input(self, request: Mapping[str, Any]) -> None:
+        if self._request_input_observer is None:
+            return
+
+        raw_input = request.get("input")
+        if not isinstance(raw_input, list):
+            return
+
+        safe_input = sanitize_value(raw_input)
+        if isinstance(safe_input, list):
+            self._request_input_observer(safe_input, dict(sanitize_value(request)))
 
     def _build_turn_request_context(
         self,

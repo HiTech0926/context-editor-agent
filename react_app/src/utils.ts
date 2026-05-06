@@ -78,7 +78,12 @@ export function normalizeConversation(records: TranscriptRecord[] = []): Message
   let lastUserText = '';
 
   return records.map((record) => {
-    const role = record.role === 'assistant' ? 'an' : 'user';
+    const rawRole = String(record.role || '').trim();
+    const role: MessageRecord['role'] = rawRole === 'assistant'
+      ? 'an'
+      : (['system', 'developer', 'compaction', 'context'].includes(rawRole)
+        ? rawRole as MessageRecord['role']
+        : 'user');
     const text = String(record.text || '');
     const toolEvents = Array.isArray(record.toolEvents) ? record.toolEvents : [];
     const attachments = normalizeAttachments(record.attachments);

@@ -719,12 +719,7 @@ export default function SettingsProvidersPanel({
                       if (pendingDeleteProviderIdRef.current === selectedProvider.id) {
                         return;
                       }
-                      const rawName = event.currentTarget.value.trim();
-                      const normalizedName =
-                        rawName || providerNameRestoreRef.current || providerDisplayName(selectedProvider);
-                      if (normalizedName !== event.currentTarget.value) {
-                        event.currentTarget.value = normalizedName;
-                      }
+                      const normalizedName = event.currentTarget.value.trim();
                       if (normalizedName !== selectedProvider.name) {
                         onProviderDraftChange(selectedProvider.id, { name: normalizedName });
                       }

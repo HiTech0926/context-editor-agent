@@ -53,10 +53,13 @@ export interface ProviderFunctionCallOutputItem {
   output: string;
 }
 
+export type ContextInputRole = 'system' | 'developer' | 'user' | 'assistant' | 'compaction' | 'context';
+
 export type ProviderItem =
   | ProviderMessageItem
   | ProviderFunctionCallItem
-  | ProviderFunctionCallOutputItem;
+  | ProviderFunctionCallOutputItem
+  | Record<string, unknown>;
 
 export interface TextMessageBlock {
   kind: 'text';
@@ -81,7 +84,7 @@ export interface ToolMessageBlock {
 export type MessageBlock = TextMessageBlock | ReasoningMessageBlock | ThinkingMessageBlock | ToolMessageBlock;
 
 export interface TranscriptRecord {
-  role: 'user' | 'assistant';
+  role: ContextInputRole;
   text: string;
   attachments?: AttachmentRecord[];
   toolEvents?: ToolEvent[];
@@ -90,7 +93,7 @@ export interface TranscriptRecord {
 }
 
 export interface MessageRecord {
-  role: 'user' | 'an';
+  role: 'user' | 'an' | 'system' | 'developer' | 'compaction' | 'context';
   text: string;
   attachments: AttachmentRecord[];
   toolEvents: ToolEvent[];
@@ -273,6 +276,7 @@ export interface InitPayload {
   projects?: ProjectSummary[];
   chat_sessions?: SessionSummary[];
   conversations?: Record<string, TranscriptRecord[]>;
+  context_inputs?: Record<string, TranscriptRecord[]>;
   context_workbench_histories?: Record<string, ContextWorkbenchHistoryEntry[]>;
   context_revision_histories?: Record<string, ContextRevisionSummary[]>;
   pending_context_restores?: Record<string, PendingContextRestore>;
@@ -321,6 +325,7 @@ export interface ArchiveProjectSessionsResponse extends ProjectActionResponse {
 
 export interface CreateSessionResponse extends SidebarPayload {
   session: SessionSummary;
+  context_input?: TranscriptRecord[];
 }
 
 export interface DeleteSessionResponse extends SidebarPayload {
@@ -336,11 +341,13 @@ export interface DeleteProjectResponse extends SidebarPayload {
 
 export interface ResetSessionResponse extends SidebarPayload {
   session: SessionSummary;
+  context_input?: TranscriptRecord[];
 }
 
 export interface TruncateSessionResponse extends SidebarPayload {
   session: SessionSummary;
   conversation: TranscriptRecord[];
+  context_input?: TranscriptRecord[];
 }
 
 export interface SendMessageResponse extends SidebarPayload {
@@ -348,6 +355,7 @@ export interface SendMessageResponse extends SidebarPayload {
   tool_events: ToolEvent[];
   blocks?: MessageBlock[];
   session: SessionSummary;
+  context_input?: TranscriptRecord[];
 }
 
 export interface ContextChatResponse {
@@ -356,12 +364,14 @@ export interface ContextChatResponse {
   tool_events?: ToolEvent[];
   history: ContextWorkbenchHistoryEntry[];
   conversation: TranscriptRecord[];
+  context_input?: TranscriptRecord[];
   revisions: ContextRevisionSummary[];
   pending_restore: PendingContextRestore | null;
 }
 
 export interface ContextRestoreResponse {
   conversation: TranscriptRecord[];
+  context_input?: TranscriptRecord[];
   history: ContextWorkbenchHistoryEntry[];
   revisions: ContextRevisionSummary[];
   pending_restore: PendingContextRestore | null;
@@ -387,7 +397,7 @@ export interface ContextWorkbenchSuggestionStats {
 export interface ContextWorkbenchSuggestionNode {
   node_index: number;
   node_number: number;
-  role: 'user' | 'assistant';
+  role: string;
   token_count: number;
   tool_token_count: number;
   preview: string;
@@ -435,6 +445,12 @@ export interface StreamDoneEvent extends SidebarPayload {
   tool_events: ToolEvent[];
   blocks?: MessageBlock[];
   session: SessionSummary;
+  context_input?: TranscriptRecord[];
+}
+
+export interface StreamContextInputEvent {
+  type: 'context_input';
+  conversation: TranscriptRecord[];
 }
 
 export interface StreamErrorEvent {
@@ -447,6 +463,7 @@ export type SendMessageStreamEvent =
   | StreamResetEvent
   | StreamModelStartEvent
   | StreamModelDoneEvent
+  | StreamContextInputEvent
   | StreamReasoningStartEvent
   | StreamReasoningDoneEvent
   | StreamToolEvent
@@ -460,6 +477,7 @@ export interface ContextChatStreamDoneEvent {
   tool_events?: ToolEvent[];
   history: ContextWorkbenchHistoryEntry[];
   conversation: TranscriptRecord[];
+  context_input?: TranscriptRecord[];
   revisions: ContextRevisionSummary[];
   pending_restore: PendingContextRestore | null;
 }

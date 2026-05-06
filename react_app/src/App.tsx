@@ -656,6 +656,65 @@ function toSettingsDraft(settings: OpenAISettings): SettingsDraft {
   };
 }
 
+type EditableTextDraftField =
+  | 'assistant_name'
+  | 'assistant_greeting'
+  | 'assistant_prompt'
+  | 'user_name'
+  | 'user_timezone'
+  | 'user_profile';
+
+const editableTextDraftFields: EditableTextDraftField[] = [
+  'assistant_name',
+  'assistant_greeting',
+  'assistant_prompt',
+  'user_name',
+  'user_timezone',
+  'user_profile',
+];
+
+function applyEditableTextOverrides(
+  draft: SettingsDraft,
+  overrides: Partial<Record<EditableTextDraftField, string>>,
+): SettingsDraft {
+  return {
+    ...draft,
+    ...overrides,
+  };
+}
+
+function preserveEditableDraftFields(nextDraft: SettingsDraft, currentDraft: SettingsDraft): SettingsDraft {
+  const currentProviders = new Map(currentDraft.response_providers.map((provider) => [provider.id, provider]));
+
+  return {
+    ...nextDraft,
+    openai_base_url: currentDraft.openai_base_url,
+    assistant_name: currentDraft.assistant_name,
+    assistant_greeting: currentDraft.assistant_greeting,
+    assistant_prompt: currentDraft.assistant_prompt,
+    temperature: currentDraft.temperature,
+    top_p: currentDraft.top_p,
+    context_message_limit: currentDraft.context_message_limit,
+    user_name: currentDraft.user_name,
+    user_locale: currentDraft.user_locale,
+    user_timezone: currentDraft.user_timezone,
+    user_profile: currentDraft.user_profile,
+    response_providers: nextDraft.response_providers.map((provider) => {
+      const currentProvider = currentProviders.get(provider.id);
+      if (!currentProvider) {
+        return provider;
+      }
+
+      return {
+        ...provider,
+        name: currentProvider.name,
+        api_base_url: currentProvider.api_base_url,
+        default_model: currentProvider.default_model,
+      };
+    }),
+  };
+}
+
 function buildSettingsSavePayload(
   draft: SettingsDraft,
   options: {
@@ -1218,6 +1277,7 @@ export default function App() {
   const [currentChatSessionId, setCurrentChatSessionId] = useState('');
   const [currentSessionId, setCurrentSessionId] = useState('');
   const [conversations, setConversations] = useState<Record<string, MessageRecord[]>>({});
+  const [contextInputMaps, setContextInputMaps] = useState<Record<string, MessageRecord[]>>({});
   const [contextWorkbenchHistories, setContextWorkbenchHistories] = useState<
     Record<string, ContextWorkbenchHistoryEntry[]>
   >({});
@@ -1274,9 +1334,11 @@ export default function App() {
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const settingsDraftRef = useRef<SettingsDraft>(settingsDraft);
+  const settingsEditableTextOverridesRef = useRef<Partial<Record<EditableTextDraftField, string>>>({});
   const settingsInitializedRef = useRef(false);
   const settingsAutosaveTimerRef = useRef<number | null>(null);
   const settingsAutosaveSnapshotRef = useRef('');
+  const settingsAutosaveLatestSnapshotRef = useRef('');
   const currentModelRef = useRef(currentModel);
   const modelSelectionRequestIdRef = useRef(0);
   const currentReasoningRef = useRef(currentReasoning);
@@ -1293,6 +1355,7 @@ export default function App() {
   const currentProject = getProjectById(projects, currentProjectId);
   const currentSessionMeta = getSessionMeta(projects, chatSessions, currentSessionId);
   const currentConversation = getConversation(conversations, currentSessionId);
+  const currentContextMapMessages = contextInputMaps[currentSessionId] || currentConversation;
   const currentReasoningLabel = getReasoningLabel(currentReasoning, reasoningOptions);
   const hasMessages = currentConversation.length > 0;
   const isSending = Boolean(currentSessionId && runningSessionIds[currentSessionId]);
@@ -1442,6 +1505,25 @@ export default function App() {
     });
   }
 
+  function updateContextInputMap(sessionId: string, records?: MessageRecord[] | null) {
+    if (!sessionId || !records) {
+      return;
+    }
+
+    setContextInputMaps((previous) => ({
+      ...previous,
+      [sessionId]: records,
+    }));
+  }
+
+  function updateContextInputMapFromTranscript(sessionId: string, records?: Parameters<typeof normalizeConversation>[0]) {
+    if (!sessionId || !records) {
+      return;
+    }
+
+    updateContextInputMap(sessionId, normalizeConversation(records));
+  }
+
   function finalizePendingAssistantMessage(
     sessionId: string,
     sourceText: string,
@@ -1540,6 +1622,40 @@ export default function App() {
     };
   }
 
+  function syncSavedSettingsMetadata(
+    nextSettings: OpenAISettings,
+    nextModels?: string[],
+    options: {
+      preserveCurrentModel?: boolean;
+      preserveCurrentReasoning?: boolean;
+    } = {},
+  ) {
+    const preserveCurrentModel = options.preserveCurrentModel ?? false;
+    const preserveCurrentReasoning = options.preserveCurrentReasoning ?? false;
+    const normalizedSettings = normalizeSettingsPayload(nextSettings);
+    const availableModels = Array.isArray(nextModels) && nextModels.length
+      ? nextModels
+      : model_options_fallback(normalizedSettings.default_model);
+
+    setOpenAISettings(normalizedSettings);
+    setModels((previous) => {
+      const merged = [currentModelRef.current, ...availableModels, ...previous].filter(Boolean);
+      return Array.from(new Set(merged));
+    });
+    const nextCurrentModel = preserveCurrentModel && currentModelRef.current
+      ? currentModelRef.current
+      : normalizedSettings.default_model || availableModels[0] || 'gpt-5.4-mini';
+    currentModelRef.current = nextCurrentModel;
+    setCurrentModel(nextCurrentModel);
+    setCurrentReasoning((previous) => {
+      const nextReasoning = preserveCurrentReasoning
+        ? currentReasoningRef.current || previous
+        : resolveReasoningEffort(normalizedSettings.default_reasoning_effort || previous, reasoningOptions);
+      currentReasoningRef.current = nextReasoning;
+      return nextReasoning;
+    });
+  }
+
   function syncSettingsState(
     nextSettings: OpenAISettings,
     nextModels?: string[],
@@ -1576,16 +1692,22 @@ export default function App() {
             default_model: currentModelId,
           };
     }
+    nextDraft = applyEditableTextOverrides(
+      preserveEditableDraftFields(nextDraft, settingsDraftRef.current),
+      settingsEditableTextOverridesRef.current,
+    );
     const nextPreferences = uiPreferencesFromSettings(normalizedSettings);
 
     setOpenAISettings(normalizedSettings);
     settingsDraftRef.current = nextDraft;
-    settingsAutosaveSnapshotRef.current = settingsPayloadSnapshot(
+    const nextSnapshot = settingsPayloadSnapshot(
       buildSettingsSavePayload(nextDraft, {
         defaultReasoningEffort: normalizedSettings.default_reasoning_effort,
         uiPreferences: nextPreferences,
       }),
     );
+    settingsAutosaveSnapshotRef.current = nextSnapshot;
+    settingsAutosaveLatestSnapshotRef.current = nextSnapshot;
     settingsInitializedRef.current = true;
     setSettingsDraft(nextDraft);
     setServiceHintsEnabled(nextPreferences.service_hints_enabled);
@@ -1619,6 +1741,19 @@ export default function App() {
     const next = updater(settingsDraftRef.current);
     settingsDraftRef.current = next;
     setSettingsDraft(next);
+  }
+
+  function rememberEditableTextPatch(patch: Partial<SettingsDraft>) {
+    const editablePatch = patch as Partial<Record<EditableTextDraftField, string>>;
+    const nextOverrides = { ...settingsEditableTextOverridesRef.current };
+
+    editableTextDraftFields.forEach((field) => {
+      if (editablePatch[field] !== undefined) {
+        nextOverrides[field] = editablePatch[field];
+      }
+    });
+
+    settingsEditableTextOverridesRef.current = nextOverrides;
   }
 
   function updateProviderDraftState(providerId: string, patch: Partial<ResponseProviderDraft>) {
@@ -1688,6 +1823,7 @@ export default function App() {
   }
 
   function applySettingsDraftPatch(patch: Partial<SettingsDraft>) {
+    rememberEditableTextPatch(patch);
     updateSettingsDraftState((previous) => {
       const next = {
         ...previous,
@@ -1792,6 +1928,7 @@ export default function App() {
           ? 'default'
           : nextReasoningOptions[0]?.value || 'default';
         const nextConversations = buildConversationMap(initData.conversations);
+        const nextContextInputMaps = buildConversationMap(initData.context_inputs);
         const nextWorkbenchHistories = buildContextWorkbenchHistoryMap(initData.context_workbench_histories);
         const nextRevisionHistories = buildContextRevisionHistoryMap(initData.context_revision_histories);
         const nextPendingRestores = buildPendingContextRestoreMap(initData.pending_context_restores);
@@ -1805,12 +1942,14 @@ export default function App() {
           nextSettings.default_reasoning_effort || preferredReasoning,
           nextReasoningOptions,
         );
-        settingsAutosaveSnapshotRef.current = settingsPayloadSnapshot(
+        const nextSnapshot = settingsPayloadSnapshot(
           buildSettingsSavePayload(nextSettingsDraft, {
             defaultReasoningEffort: nextSettings.default_reasoning_effort,
             uiPreferences: nextPreferences,
           }),
         );
+        settingsAutosaveSnapshotRef.current = nextSnapshot;
+        settingsAutosaveLatestSnapshotRef.current = nextSnapshot;
         currentModelRef.current = nextModel;
         currentReasoningRef.current = nextCurrentReasoning;
 
@@ -1821,6 +1960,7 @@ export default function App() {
           setReasoningOptions(nextReasoningOptions);
           setCurrentReasoning(nextCurrentReasoning);
           setConversations(nextConversations);
+          setContextInputMaps(nextContextInputMaps);
           setContextWorkbenchHistories(nextWorkbenchHistories);
           setContextRevisionHistories(nextRevisionHistories);
           setPendingContextRestores(nextPendingRestores);
@@ -1867,6 +2007,7 @@ export default function App() {
       uiPreferences: currentUiPreferences(),
     });
     const snapshot = settingsPayloadSnapshot(payload);
+    settingsAutosaveLatestSnapshotRef.current = snapshot;
     if (snapshot === settingsAutosaveSnapshotRef.current) {
       return;
     }
@@ -1878,8 +2019,12 @@ export default function App() {
     settingsAutosaveTimerRef.current = window.setTimeout(async () => {
       try {
         const response = await saveSettingsRequest(payload);
+        if (settingsAutosaveLatestSnapshotRef.current !== snapshot) {
+          return;
+        }
         settingsAutosaveSnapshotRef.current = snapshot;
-        syncSettingsState(response.settings, response.models);
+        settingsAutosaveLatestSnapshotRef.current = snapshot;
+        syncSavedSettingsMetadata(response.settings, response.models);
       } catch (error) {
         showToast(getThrownMessage(error));
       }
@@ -2126,6 +2271,7 @@ export default function App() {
       ...previous,
       [data.session.id]: previous[data.session.id] || [],
     }));
+    updateContextInputMapFromTranscript(data.session.id, data.context_input);
     setContextWorkbenchHistories((previous) => ({
       ...previous,
       [data.session.id]: previous[data.session.id] || [],
@@ -2558,6 +2704,7 @@ export default function App() {
             ? response.session.project_id || currentProjectIdRef.current
             : currentProjectIdRef.current,
         );
+        updateContextInputMapFromTranscript(sessionId, response.context_input);
         if (isViewingSession(sessionId) && response.session.scope === 'project') {
           const nextProjectId = response.session.project_id || currentProjectIdRef.current;
           setCurrentProjectId(nextProjectId || '');
@@ -2659,6 +2806,11 @@ export default function App() {
             return;
           }
 
+          if (event.type === 'context_input') {
+            updateContextInputMapFromTranscript(sessionId, event.conversation);
+            return;
+          }
+
           if (event.type === 'error') {
             streamError = event.error;
             return;
@@ -2686,6 +2838,7 @@ export default function App() {
               ? event.session.project_id || currentProjectIdRef.current
               : currentProjectIdRef.current,
           );
+          updateContextInputMapFromTranscript(sessionId, event.context_input);
 
           if (isViewingSession(sessionId) && event.session.scope === 'project') {
             const nextProjectId = event.session.project_id || currentProjectIdRef.current;
@@ -2771,15 +2924,20 @@ export default function App() {
 
   async function handleSaveOpenAISettings() {
     setIsSavingSettings(true);
+    const payload = buildSettingsSavePayload(settingsDraftRef.current, {
+      defaultReasoningEffort: currentReasoningRef.current,
+      uiPreferences: currentUiPreferences(),
+    });
+    const snapshot = settingsPayloadSnapshot(payload);
+    settingsAutosaveLatestSnapshotRef.current = snapshot;
     try {
-      const response = await saveSettingsRequest(
-        buildSettingsSavePayload(settingsDraftRef.current, {
-          defaultReasoningEffort: currentReasoningRef.current,
-          uiPreferences: currentUiPreferences(),
-        }),
-      );
-
-      syncSettingsState(response.settings, response.models);
+      const response = await saveSettingsRequest(payload);
+      if (settingsAutosaveLatestSnapshotRef.current !== snapshot) {
+        return;
+      }
+      settingsAutosaveSnapshotRef.current = snapshot;
+      settingsAutosaveLatestSnapshotRef.current = snapshot;
+      syncSavedSettingsMetadata(response.settings, response.models);
       showToast(SETTINGS_SAVED_TOAST);
     } catch (error) {
       showToast(getThrownMessage(error));
@@ -2847,6 +3005,7 @@ export default function App() {
         ...previous,
         [currentSessionId]: normalizeConversation(response.conversation),
       }));
+      updateContextInputMapFromTranscript(currentSessionId, response.context_input);
       showToast(EDIT_TOAST);
     } catch (error) {
       setConversations((previous) => ({
@@ -2892,6 +3051,7 @@ export default function App() {
         ...previous,
         [sessionId]: normalizeConversation(response.conversation),
       }));
+      updateContextInputMapFromTranscript(sessionId, response.context_input);
       showToast('这条消息已经删掉了。');
     } catch (error) {
       showToast(getThrownMessage(error));
@@ -2993,7 +3153,9 @@ export default function App() {
     flushSync(() => {
       currentModelRef.current = modelId;
       settingsDraftRef.current = nextDraft;
-      settingsAutosaveSnapshotRef.current = settingsPayloadSnapshot(savePayload);
+      const saveSnapshot = settingsPayloadSnapshot(savePayload);
+      settingsAutosaveSnapshotRef.current = saveSnapshot;
+      settingsAutosaveLatestSnapshotRef.current = saveSnapshot;
       setCurrentModel(modelId);
       setSettingsDraft(nextDraft);
       setIsModelPickerOpen(false);
@@ -3024,7 +3186,9 @@ export default function App() {
           uiPreferences: currentUiPreferences(),
         });
         settingsDraftRef.current = previousDraft;
-        settingsAutosaveSnapshotRef.current = settingsPayloadSnapshot(previousPayload);
+        const previousSnapshot = settingsPayloadSnapshot(previousPayload);
+        settingsAutosaveSnapshotRef.current = previousSnapshot;
+        settingsAutosaveLatestSnapshotRef.current = previousSnapshot;
         currentModelRef.current = previousModel;
         setSettingsDraft(previousDraft);
         setCurrentModel(previousModel);
@@ -3329,7 +3493,7 @@ export default function App() {
 
             <ContextMapSidebar
               stage={contextMap.stage}
-              messages={currentConversation}
+              messages={currentContextMapMessages}
               onToggle={handleToggleContextMap}
               onJumpToMessage={handleJumpToMainChatMessage}
               sessionId={currentSessionId}
@@ -3340,6 +3504,7 @@ export default function App() {
               reasoningOptions={reasoningOptions}
               onContextWorkbenchHistoryChange={handleContextWorkbenchHistoryChange}
               onContextWorkbenchConversationChange={handleContextWorkbenchConversationChange}
+              onContextInputChange={updateContextInputMap}
               onContextRevisionHistoryChange={handleContextRevisionHistoryChange}
               onPendingContextRestoreChange={handlePendingContextRestoreChange}
               onEnsureSession={ensureSession}

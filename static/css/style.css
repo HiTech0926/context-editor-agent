@@ -302,7 +302,7 @@
             transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
         }
 
-        .context-node-row.hovered .context-node-gutter,
+        .context-node-row:hover .context-node-gutter,
         .context-node-row.expanded .context-node-gutter {
             color: rgba(var(--an-theme-rgb), 0.98);
         }

@@ -59,6 +59,7 @@ interface ContextWorkbenchProps {
   reasoningOptions: ReasoningOption[];
   onHistoryChange: (sessionId: string, history: ContextWorkbenchHistoryEntry[]) => void;
   onConversationChange: (sessionId: string, conversation: MessageRecord[]) => void;
+  onContextInputChange: (sessionId: string, conversation: MessageRecord[]) => void;
   onRevisionHistoryChange: (sessionId: string, revisions: ContextRevisionSummary[]) => void;
   onPendingRestoreChange: (sessionId: string, pendingRestore: PendingContextRestore | null) => void;
   onEnsureSession: () => Promise<string>;
@@ -320,6 +321,7 @@ export default function ContextWorkbench({
   reasoningOptions,
   onHistoryChange,
   onConversationChange,
+  onContextInputChange,
   onRevisionHistoryChange,
   onPendingRestoreChange,
   onEnsureSession,
@@ -744,6 +746,9 @@ export default function ContextWorkbench({
           streamCompleted = true;
           onHistoryChange(targetSessionId, event.history);
           onConversationChange(targetSessionId, normalizeConversation(event.conversation));
+          if (event.context_input) {
+            onContextInputChange(targetSessionId, normalizeConversation(event.context_input));
+          }
           onRevisionHistoryChange(targetSessionId, event.revisions || []);
           onPendingRestoreChange(targetSessionId, event.pending_restore || null);
           setManualMessages(buildManualMessagesFromHistory(event.history));
@@ -806,6 +811,9 @@ export default function ContextWorkbench({
       });
       onHistoryChange(sessionId, response.history || []);
       onConversationChange(sessionId, normalizeConversation(response.conversation));
+      if (response.context_input) {
+        onContextInputChange(sessionId, normalizeConversation(response.context_input));
+      }
       onRevisionHistoryChange(sessionId, response.revisions || []);
       onPendingRestoreChange(sessionId, response.pending_restore || null);
       setManualMessages(buildManualMessagesFromHistory(response.history || []));
@@ -855,6 +863,9 @@ export default function ContextWorkbench({
       });
       onHistoryChange(sessionId, response.history || []);
       onConversationChange(sessionId, normalizeConversation(response.conversation));
+      if (response.context_input) {
+        onContextInputChange(sessionId, normalizeConversation(response.context_input));
+      }
       onRevisionHistoryChange(sessionId, response.revisions || []);
       onPendingRestoreChange(sessionId, response.pending_restore || null);
       setManualMessages(buildManualMessagesFromHistory(response.history || []));
@@ -877,6 +888,9 @@ export default function ContextWorkbench({
       });
       onHistoryChange(sessionId, response.history || []);
       onConversationChange(sessionId, normalizeConversation(response.conversation));
+      if (response.context_input) {
+        onContextInputChange(sessionId, normalizeConversation(response.context_input));
+      }
       onRevisionHistoryChange(sessionId, response.revisions || []);
       onPendingRestoreChange(sessionId, response.pending_restore || null);
       setManualMessages(buildManualMessagesFromHistory(response.history || []));

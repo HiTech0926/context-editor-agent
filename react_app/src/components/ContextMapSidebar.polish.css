@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  contain: layout paint;
 }
 
 .context-node-row {
@@ -9,6 +10,8 @@
   grid-template-columns: 32px minmax(0, 1fr);
   column-gap: 10px;
   align-items: center;
+  content-visibility: auto;
+  contain-intrinsic-size: 64px;
 }
 
 .context-node-row.expanded {

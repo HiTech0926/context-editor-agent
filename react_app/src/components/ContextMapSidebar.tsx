@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -40,6 +41,7 @@ interface ContextMapSidebarProps {
   reasoningOptions: ReasoningOption[];
   onContextWorkbenchHistoryChange: (sessionId: string, history: ContextWorkbenchHistoryEntry[]) => void;
   onContextWorkbenchConversationChange: (sessionId: string, conversation: MessageRecord[]) => void;
+  onContextInputChange: (sessionId: string, conversation: MessageRecord[]) => void;
   onContextRevisionHistoryChange: (sessionId: string, revisions: ContextRevisionSummary[]) => void;
   onPendingContextRestoreChange: (sessionId: string, pendingRestore: PendingContextRestore | null) => void;
   onEnsureSession: () => Promise<string>;
@@ -60,6 +62,8 @@ interface MessageStat extends ContextMessageTokenStat {
   previewText: string;
 }
 
+type MessageStatBase = Omit<MessageStat, 'weightClass'>;
+
 interface ScrollMetrics {
   clientHeight: number;
   scrollHeight: number;
@@ -76,6 +80,9 @@ const MINIMAP_CONTENT_PADDING_PX = 14;
 const MINIMAP_BAR_GAP_PX = 8;
 const MINIMAP_VIEWPORT_MIN_HEIGHT_PX = 56;
 const MINIMAP_VIEWPORT_KEEP_OFFSET_PX = 14;
+const VIRTUAL_NODE_ROW_STRIDE_PX = 64;
+const VIRTUAL_NODE_OVERSCAN = 14;
+const VIRTUAL_NODE_MIN_COUNT = 80;
 const SELECTION_DRAG_THRESHOLD_PX = 4;
 const SELECTION_AUTO_SCROLL_EDGE_PX = 68;
 const SELECTION_AUTO_SCROLL_MAX_SPEED_PX = 14;
@@ -85,7 +92,7 @@ function normalizePlainText(value: string) {
 }
 
 function getMinimapBarHeightPx(role: MessageRecord['role'], weightClass: ContextTokenWeightClass) {
-  if (role === 'user') {
+  if (role === 'user' || role === 'developer' || role === 'system' || role === 'compaction' || role === 'context') {
     return 4;
   }
 
@@ -98,6 +105,17 @@ function getMinimapBarHeightPx(role: MessageRecord['role'], weightClass: Context
   }
 
   return 5;
+}
+
+function getContextNodeRoleName(role: MessageRecord['role']) {
+  if (role === 'an') {
+    return 'assistant';
+  }
+  return role;
+}
+
+function getContextNodeClassName(role: MessageRecord['role']) {
+  return role === 'an' ? 'assistant' : role;
 }
 
 function buildRangeSelection(
@@ -150,6 +168,7 @@ export default function ContextMapSidebar({
   reasoningOptions,
   onContextWorkbenchHistoryChange,
   onContextWorkbenchConversationChange,
+  onContextInputChange,
   onContextRevisionHistoryChange,
   onPendingContextRestoreChange,
   onEnsureSession,
@@ -171,18 +190,18 @@ export default function ContextMapSidebar({
     hasMoved: boolean;
   } | null>(null);
   const selectionAutoScrollFrameRef = useRef<number | null>(null);
+  const previousMessageCountRef = useRef(messages.length);
   const [expandedIndexes, setExpandedIndexes] = useState<Set<number>>(new Set());
   const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [nodeLayouts, setNodeLayouts] = useState<NodeLayout[]>([]);
   const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>(DEFAULT_SCROLL_METRICS);
   const [tokenThresholds, setTokenThresholds] = useState<ContextTokenThresholds>(DEFAULT_CONTEXT_TOKEN_THRESHOLDS);
   const showMinimap = stage === 2;
 
-  const messageStats: MessageStat[] = messages.map((message, index) => {
+  const messageStatBase = useMemo<MessageStatBase[]>(() => messages.map((message, index) => {
     const tokens = countTokens(getContextWeightSource(message));
     const toolTokens = countTokens(getContextToolWeightSource(message));
-    const roleName = message.role === 'user' ? 'user' : 'assistant';
+    const roleName = getContextNodeRoleName(message.role);
     const size = (tokens / 1000).toFixed(1);
 
     return {
@@ -193,9 +212,13 @@ export default function ContextMapSidebar({
       previewText: getMessagePreviewText(message),
       tokens,
       toolTokens,
-      weightClass: getContextTokenWeightClass(tokens, tokenThresholds),
     };
-  });
+  }), [messages]);
+
+  const messageStats = useMemo<MessageStat[]>(() => messageStatBase.map((stats) => ({
+    ...stats,
+    weightClass: getContextTokenWeightClass(stats.tokens, tokenThresholds),
+  })), [messageStatBase, tokenThresholds]);
 
   const scrollRange = Math.max(scrollMetrics.scrollHeight - scrollMetrics.clientHeight, 0);
   const scrollRatio = scrollRange <= 0 ? 0 : scrollMetrics.scrollTop / scrollRange;
@@ -277,6 +300,30 @@ export default function ContextMapSidebar({
     };
   }
 
+  const shouldVirtualizeList = stage === 2 && expandedIndexes.size === 0 && messages.length > VIRTUAL_NODE_MIN_COUNT;
+  const virtualStartIndex = shouldVirtualizeList
+    ? Math.max(0, Math.floor(scrollMetrics.scrollTop / VIRTUAL_NODE_ROW_STRIDE_PX) - VIRTUAL_NODE_OVERSCAN)
+    : 0;
+  const virtualEndIndex = shouldVirtualizeList
+    ? Math.min(
+        messages.length,
+        Math.ceil((scrollMetrics.scrollTop + scrollMetrics.clientHeight) / VIRTUAL_NODE_ROW_STRIDE_PX) + VIRTUAL_NODE_OVERSCAN,
+      )
+    : messages.length;
+  const virtualTopSpacerHeightPx = shouldVirtualizeList ? virtualStartIndex * VIRTUAL_NODE_ROW_STRIDE_PX : 0;
+  const virtualBottomSpacerHeightPx = shouldVirtualizeList
+    ? Math.max(0, (messages.length - virtualEndIndex) * VIRTUAL_NODE_ROW_STRIDE_PX)
+    : 0;
+  const visibleMessageEntries = useMemo(
+    () => (shouldVirtualizeList
+      ? messages.slice(virtualStartIndex, virtualEndIndex).map((message, offset) => ({
+          index: virtualStartIndex + offset,
+          message,
+        }))
+      : messages.map((message, index) => ({ index, message }))),
+    [messages, shouldVirtualizeList, virtualEndIndex, virtualStartIndex],
+  );
+
   useEffect(() => {
     setExpandedIndexes(new Set());
     setSelectedIndexes(new Set());
@@ -313,15 +360,36 @@ export default function ContextMapSidebar({
   }, [stage]);
 
   useEffect(() => {
+    const messageCountChanged = previousMessageCountRef.current !== messages.length;
+    previousMessageCountRef.current = messages.length;
+
+    if (!messageCountChanged || stage === 0) {
+      return;
+    }
+
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, stage]);
+  }, [messages.length, stage]);
 
   useEffect(() => {
+    if (stage === 0) {
+      return;
+    }
+
     function measureNodes() {
       const container = scrollRef.current;
       if (!container) {
+        return;
+      }
+
+      if (shouldVirtualizeList) {
+        setNodeLayouts([]);
+        setScrollMetrics({
+          clientHeight: container.clientHeight || 1,
+          scrollHeight: container.scrollHeight || 1,
+          scrollTop: container.scrollTop,
+        });
         return;
       }
 
@@ -366,9 +434,13 @@ export default function ContextMapSidebar({
       window.removeEventListener('resize', measureNodes);
       resizeObserver?.disconnect();
     };
-  }, [messages, expandedIndexes, stage]);
+  }, [messages, expandedIndexes, shouldVirtualizeList, stage]);
 
   useEffect(() => {
+    if (stage === 0) {
+      return undefined;
+    }
+
     const container = scrollRef.current;
     if (!container) {
       return undefined;
@@ -392,6 +464,10 @@ export default function ContextMapSidebar({
   }, [messages.length, stage]);
 
   useEffect(() => {
+    if (!showMinimap) {
+      return;
+    }
+
     const minimapScroller = minimapScrollRef.current;
     if (!minimapScroller) {
       return;
@@ -404,7 +480,7 @@ export default function ContextMapSidebar({
     );
 
     minimapScroller.scrollTop = desiredScrollTop;
-  }, [minimapContentHeightPx, minimapViewportTopPx, stage, messages.length]);
+  }, [minimapContentHeightPx, minimapViewportTopPx, showMinimap, messages.length]);
 
   useEffect(() => {
     function handleWindowMouseMove(event: MouseEvent) {
@@ -453,12 +529,23 @@ export default function ContextMapSidebar({
 
   function getNodeIndexFromClientY(clientY: number) {
     const container = scrollRef.current;
-    if (!container || !nodeLayouts.length) {
+    if (!container) {
       return null;
     }
 
     const rect = container.getBoundingClientRect();
     const relativeY = clientY - rect.top + container.scrollTop;
+
+    if (shouldVirtualizeList) {
+      return Math.min(
+        Math.max(Math.floor(relativeY / VIRTUAL_NODE_ROW_STRIDE_PX), 0),
+        Math.max(messages.length - 1, 0),
+      );
+    }
+
+    if (!nodeLayouts.length) {
+      return null;
+    }
 
     for (let index = 0; index < nodeLayouts.length; index += 1) {
       const layout = nodeLayouts[index];
@@ -658,7 +745,19 @@ export default function ContextMapSidebar({
     const container = scrollRef.current;
     const layout = nodeLayouts[index];
 
-    if (!container || !layout) {
+    if (!container) {
+      return;
+    }
+
+    if (shouldVirtualizeList && !layout) {
+      container.scrollTo({
+        top: Math.max(index * VIRTUAL_NODE_ROW_STRIDE_PX - 18, 0),
+        behavior: 'smooth',
+      });
+      return;
+    }
+
+    if (!layout) {
       return;
     }
 
@@ -719,10 +818,16 @@ export default function ContextMapSidebar({
     syncScrollFromMinimap(event.clientY);
   }
 
-  const selectedNodeIndexes = [...selectedIndexes].sort((left, right) => left - right);
-  const criticalNodeIndexes = messageStats
-    .map((stats, index) => (stats.weightClass === 'heavy' ? index : -1))
-    .filter((index) => index >= 0);
+  const selectedNodeIndexes = useMemo(
+    () => [...selectedIndexes].sort((left, right) => left - right),
+    [selectedIndexes],
+  );
+  const criticalNodeIndexes = useMemo(
+    () => messageStats
+      .map((stats, index) => (stats.weightClass === 'heavy' ? index : -1))
+      .filter((index) => index >= 0),
+    [messageStats],
+  );
 
   return (
     <aside className={`right-panel stage-${stage}`}>
@@ -745,25 +850,26 @@ export default function ContextMapSidebar({
           <div className="context-map-scroll-shell" ref={scrollRef}>
             <div className="context-map-list-inner">
               {messages.length > 0 ? (
-                messages.map((message, index) => {
-                  const isExpanded = expandedIndexes.has(index);
-                  const isSelected = selectedIndexes.has(index);
-                  const stats = messageStats[index];
-                  const canExpand = canExpandMessage(message, stats.previewText);
-                  const canToggleExpand = stage !== 1 && canExpand;
-                  const canJumpToChat = stage === 1;
-                  const isInteractive = canToggleExpand || canJumpToChat;
-                  const hoverClass = hoveredIndex === index ? 'hovered' : '';
-                  const selectedClass = isSelected ? 'selected' : '';
+                <>
+                  {shouldVirtualizeList && virtualTopSpacerHeightPx > 0 ? (
+                    <div aria-hidden="true" style={{ flexShrink: 0, height: `${virtualTopSpacerHeightPx}px` }} />
+                  ) : null}
+                  {visibleMessageEntries.map(({ message, index }) => {
+                    const isExpanded = expandedIndexes.has(index);
+                    const isSelected = selectedIndexes.has(index);
+                    const stats = messageStats[index];
+                    const canExpand = canExpandMessage(message, stats.previewText);
+                    const canToggleExpand = stage !== 1 && canExpand;
+                    const canJumpToChat = stage === 1;
+                    const isInteractive = canToggleExpand || canJumpToChat;
+                    const selectedClass = isSelected ? 'selected' : '';
 
-                  return (
-                    <div
-                      className={`context-node-row ${message.role === 'user' ? 'user' : 'assistant'} ${isExpanded ? 'expanded' : ''} ${hoverClass} ${selectedClass} ${stage === 1 ? 'without-gutter' : ''}`}
-                      key={`${message.role}-${index}`}
-                      onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() => setHoveredIndex((previous) => (previous === index ? null : previous))}
-                      ref={(node) => setNodeRef(index, node)}
-                    >
+                    return (
+                      <div
+                        className={`context-node-row ${getContextNodeClassName(message.role)} ${isExpanded ? 'expanded' : ''} ${selectedClass} ${stage === 1 ? 'without-gutter' : ''}`}
+                        key={`${message.role}-${index}`}
+                        ref={(node) => setNodeRef(index, node)}
+                      >
                       {stage !== 1 ? (
                         <button
                           className="context-node-gutter"
@@ -778,7 +884,7 @@ export default function ContextMapSidebar({
                       ) : null}
 
                       <div
-                        className={`context-map-item ${message.role === 'user' ? 'user' : 'assistant'} ${isExpanded ? 'expanded' : ''} ${selectedClass}`}
+                        className={`context-map-item ${getContextNodeClassName(message.role)} ${isExpanded ? 'expanded' : ''} ${selectedClass}`}
                       >
                         <button
                           aria-expanded={canToggleExpand ? isExpanded : undefined}
@@ -813,11 +919,8 @@ export default function ContextMapSidebar({
                           ) : null}
                         </button>
 
-                        {canToggleExpand ? (
-                          <div
-                            className={`context-map-expanded-shell ${isExpanded ? 'open' : ''}`}
-                            aria-hidden={!isExpanded}
-                          >
+                        {canToggleExpand && isExpanded ? (
+                          <div className="context-map-expanded-shell open">
                             <div className="context-map-expanded-content">
                               <div className="context-map-expanded-body">
                                 <MessageContent record={message} variant="context-map" />
@@ -827,8 +930,12 @@ export default function ContextMapSidebar({
                         ) : null}
                       </div>
                     </div>
-                  );
-                })
+                    );
+                  })}
+                  {shouldVirtualizeList && virtualBottomSpacerHeightPx > 0 ? (
+                    <div aria-hidden="true" style={{ flexShrink: 0, height: `${virtualBottomSpacerHeightPx}px` }} />
+                  ) : null}
+                </>
               ) : (
                 <div style={{ padding: '20px', textAlign: 'center', opacity: 0.4, fontSize: '13px' }}>
                   这里会显示本轮真正进入上下文的消息。
@@ -849,7 +956,7 @@ export default function ContextMapSidebar({
 
                         return (
                           <button
-                            className={`context-minimap-bar ${message.role === 'user' ? 'user' : 'assistant'} weight-${stats.weightClass} ${hoveredIndex === index ? 'hovered' : ''} ${selectedIndexes.has(index) ? 'selected' : ''}`}
+                            className={`context-minimap-bar ${getContextNodeClassName(message.role)} weight-${stats.weightClass} ${selectedIndexes.has(index) ? 'selected' : ''}`}
                             key={`minimap-${message.role}-${index}`}
                             type="button"
                             style={{
@@ -863,8 +970,6 @@ export default function ContextMapSidebar({
                               event.stopPropagation();
                               scrollToNode(index);
                             }}
-                            onMouseEnter={() => setHoveredIndex(index)}
-                            onMouseLeave={() => setHoveredIndex((previous) => (previous === index ? null : previous))}
                             aria-label={`定位到第 ${index + 1} 个节点，约 ${stats.tokens} 个 token`}
                           />
                         );
@@ -886,25 +991,28 @@ export default function ContextMapSidebar({
       </div>
 
       <div className="extended-pane">
-        <ContextWorkbench
-          messages={messages}
-          messageTokenStats={messageStats}
-          selectedNodeIndexes={selectedNodeIndexes}
-          criticalNodeIndexes={criticalNodeIndexes}
-          tokenThresholds={tokenThresholds}
-          sessionId={sessionId}
-          isMainChatBusy={isMainChatBusy}
-          history={contextWorkbenchHistory}
-          revisions={contextRevisionHistory}
-          pendingRestore={pendingContextRestore}
-          reasoningOptions={reasoningOptions}
-          onHistoryChange={onContextWorkbenchHistoryChange}
-          onConversationChange={onContextWorkbenchConversationChange}
-          onRevisionHistoryChange={onContextRevisionHistoryChange}
-          onPendingRestoreChange={onPendingContextRestoreChange}
-          onEnsureSession={onEnsureSession}
-          onTokenThresholdsChange={setTokenThresholds}
-        />
+        {stage === 2 ? (
+          <ContextWorkbench
+            messages={messages}
+            messageTokenStats={messageStats}
+            selectedNodeIndexes={selectedNodeIndexes}
+            criticalNodeIndexes={criticalNodeIndexes}
+            tokenThresholds={tokenThresholds}
+            sessionId={sessionId}
+            isMainChatBusy={isMainChatBusy}
+            history={contextWorkbenchHistory}
+            revisions={contextRevisionHistory}
+            pendingRestore={pendingContextRestore}
+            reasoningOptions={reasoningOptions}
+            onHistoryChange={onContextWorkbenchHistoryChange}
+            onConversationChange={onContextWorkbenchConversationChange}
+            onContextInputChange={onContextInputChange}
+            onRevisionHistoryChange={onContextRevisionHistoryChange}
+            onPendingRestoreChange={onPendingContextRestoreChange}
+            onEnsureSession={onEnsureSession}
+            onTokenThresholdsChange={setTokenThresholds}
+          />
+        ) : null}
       </div>
     </aside>
   );

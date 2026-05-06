@@ -1,6 +1,6 @@
 {
   "name": "hash-code-desktop",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "A context-first desktop shell for the hashcode agent.",
   "author": "hashcode",
@@ -18,7 +18,9 @@
     "build:react": "vite build --config react_app/vite.config.ts",
     "preview:react": "vite preview --config react_app/vite.config.ts",
     "dist": "npm run dist:win",
-    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win --x64"
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win --x64",
+    "dist:mac:intel": "npm run build:react && CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --x64",
+    "dist:linux": "npm run build:react && npx electron-builder --linux --x64"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
@@ -38,10 +40,12 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "electron": "^37.10.3",
+    "electron-builder": "^26.8.1",
+    "resedit": "^3.0.2",
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
   },
-    "build": {
+  "build": {
     "appId": "com.hashcode.desktop",
     "productName": "hashcode",
     "asar": false,
@@ -68,6 +72,22 @@
       "target": "nsis",
       "signAndEditExecutable": false,
       "forceCodeSigning": false
+    },
+    "mac": {
+      "icon": "electron/assets/hash-icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": null
+    },
+    "linux": {
+      "icon": "electron/assets/hash-icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
     },
     "nsis": {
       "oneClick": false,

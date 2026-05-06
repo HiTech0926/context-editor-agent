@@ -57,6 +57,25 @@ class _ToolUseBuffer:
         return "".join(self.json_chunks) or "{}"
 
 
+@dataclass(slots=True)
+class _ThinkingBlockBuffer:
+    index: int
+    block_type: str = "thinking"
+    thinking_chunks: list[str] = field(default_factory=list)
+    signature: str = ""
+    provider_raw: Any | None = None
+
+    def to_block(self) -> dict[str, Any]:
+        block: dict[str, Any] = {"type": self.block_type}
+        if self.block_type == "thinking":
+            block["thinking"] = "".join(self.thinking_chunks)
+            if self.signature:
+                block["signature"] = self.signature
+        elif isinstance(self.provider_raw, Mapping):
+            block.update(dict(self.provider_raw))
+        return block
+
+
 class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
     """Anthropic Messages API request and stream translation."""
 
@@ -112,6 +131,8 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
 
     def _stream_events(self, stream: Iterable[Any]) -> Iterable[AdapterStreamEvent]:
         output_chunks: list[str] = []
+        text_blocks: dict[int, list[str]] = {}
+        thinking_buffers: dict[int, _ThinkingBlockBuffer] = {}
         tool_buffers: dict[int, _ToolUseBuffer] = {}
         emitted_tool_indexes: set[int] = set()
         canonical_items: list[dict[str, Any]] = []
@@ -128,16 +149,32 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                 content_block = _get_value(event, "content_block")
                 content_block_type = _get_value(content_block, "type")
                 if content_block_type == "thinking":
+                    thinking_buffers[index] = _ThinkingBlockBuffer(
+                        index=index,
+                        block_type="thinking",
+                        provider_raw=content_block,
+                    )
                     active_reasoning_indexes.add(index)
                     yield ReasoningStartEvent(provider_raw=event)
                     initial_thinking = _coerce_text(
                         _get_value(content_block, "thinking", "")
                     )
                     if initial_thinking:
+                        thinking_buffers[index].thinking_chunks.append(initial_thinking)
                         yield ReasoningDeltaEvent(
                             delta=initial_thinking,
                             provider_raw=event,
                         )
+                elif content_block_type == "redacted_thinking":
+                    thinking_buffers[index] = _ThinkingBlockBuffer(
+                        index=index,
+                        block_type="redacted_thinking",
+                        provider_raw=content_block,
+                    )
+                elif content_block_type == "text":
+                    initial_text = _coerce_text(_get_value(content_block, "text", ""))
+                    if initial_text:
+                        text_blocks.setdefault(index, []).append(initial_text)
                 elif content_block_type == "tool_use":
                     tool_buffers[index] = _ToolUseBuffer(
                         index=index,
@@ -160,10 +197,15 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                     text_delta = _coerce_text(_get_value(delta, "text", ""))
                     if text_delta:
                         output_chunks.append(text_delta)
+                        text_blocks.setdefault(index, []).append(text_delta)
                         yield TextDeltaEvent(delta=text_delta, provider_raw=event)
                 elif delta_type == "thinking_delta":
                     thinking_delta = _coerce_text(_get_value(delta, "thinking", ""))
                     if thinking_delta:
+                        thinking_buffers.setdefault(
+                            index,
+                            _ThinkingBlockBuffer(index=index),
+                        ).thinking_chunks.append(thinking_delta)
                         if index not in active_reasoning_indexes:
                             active_reasoning_indexes.add(index)
                             yield ReasoningStartEvent(provider_raw=event)
@@ -171,6 +213,13 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                             delta=thinking_delta,
                             provider_raw=event,
                         )
+                elif delta_type == "signature_delta":
+                    signature = _coerce_text(_get_value(delta, "signature", ""))
+                    if signature:
+                        thinking_buffers.setdefault(
+                            index,
+                            _ThinkingBlockBuffer(index=index),
+                        ).signature += signature
                 elif delta_type == "input_json_delta":
                     buffer = tool_buffers.setdefault(index, _ToolUseBuffer(index=index))
                     buffer.json_chunks.append(
@@ -185,7 +234,6 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                 if index in tool_buffers and index not in emitted_tool_indexes:
                     tool_event = _tool_call_ready_event(tool_buffers[index], event)
                     emitted_tool_indexes.add(index)
-                    canonical_items.append(_canonical_tool_call_item(tool_event))
                     yield tool_event
 
             elif event_type == "message_delta":
@@ -201,18 +249,14 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                     emitted_tool_indexes,
                     provider_raw=event,
                 ):
-                    canonical_items.append(_canonical_tool_call_item(tool_event))
                     yield tool_event
 
-                if output_chunks:
-                    canonical_items.insert(
-                        0,
-                        {
-                            "type": "message",
-                            "role": "assistant",
-                            "content": "".join(output_chunks),
-                        },
-                    )
+                canonical_items = _canonical_assistant_items(
+                    text_blocks=text_blocks,
+                    thinking_buffers=thinking_buffers,
+                    tool_buffers=tool_buffers,
+                    output_text="".join(output_chunks),
+                )
 
                 yield ProviderDoneEvent(
                     output_text="".join(output_chunks),
@@ -253,18 +297,14 @@ class ClaudeAdapter(BaseAdapter[dict[str, Any]]):
                 emitted_tool_indexes,
                 provider_raw=None,
             ):
-                canonical_items.append(_canonical_tool_call_item(tool_event))
                 yield tool_event
 
-            if output_chunks:
-                canonical_items.insert(
-                    0,
-                    {
-                        "type": "message",
-                        "role": "assistant",
-                        "content": "".join(output_chunks),
-                    },
-                )
+            canonical_items = _canonical_assistant_items(
+                text_blocks=text_blocks,
+                thinking_buffers=thinking_buffers,
+                tool_buffers=tool_buffers,
+                output_text="".join(output_chunks),
+            )
 
             yield ProviderDoneEvent(
                 output_text="".join(output_chunks),
@@ -397,7 +437,7 @@ def _content_to_blocks(content: Any) -> list[dict[str, Any]]:
             return [block] if block else []
         if block_type == "image" and isinstance(content.get("source"), Mapping):
             return [dict(content)]
-        if block_type in {"tool_use", "tool_result"}:
+        if block_type in {"thinking", "redacted_thinking", "tool_use", "tool_result"}:
             return [dict(content)]
         return [{"type": "text", "text": json.dumps(content, ensure_ascii=False)}]
 
@@ -547,13 +587,42 @@ def _remaining_tool_events(
         yield _tool_call_ready_event(tool_buffers[index], provider_raw)
 
 
-def _canonical_tool_call_item(event: ToolCallReadyEvent) -> dict[str, Any]:
-    return {
-        "type": "tool_call",
-        "name": event.name,
-        "call_id": event.call_id or "",
-        "arguments": dict(event.arguments),
-    }
+def _canonical_assistant_items(
+    *,
+    text_blocks: Mapping[int, list[str]],
+    thinking_buffers: Mapping[int, _ThinkingBlockBuffer],
+    tool_buffers: Mapping[int, _ToolUseBuffer],
+    output_text: str,
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    indexes = sorted({*text_blocks, *thinking_buffers, *tool_buffers})
+    for index in indexes:
+        if index in thinking_buffers:
+            block = thinking_buffers[index].to_block()
+            if block.get("type") != "thinking" or block.get("thinking") or block.get("signature"):
+                blocks.append(block)
+        if index in text_blocks:
+            text = "".join(text_blocks[index])
+            if text:
+                blocks.append({"type": "text", "text": text})
+        if index in tool_buffers:
+            buffer = tool_buffers[index]
+            blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": buffer.call_id,
+                    "name": buffer.name,
+                    "input": _parse_tool_arguments(buffer.raw_arguments),
+                }
+            )
+
+    if not blocks and output_text:
+        blocks.append({"type": "text", "text": output_text})
+
+    if not blocks:
+        return []
+
+    return [{"type": "message", "role": "assistant", "content": blocks}]
 
 
 def _parse_tool_arguments(raw_arguments: str) -> Mapping[str, Any]:

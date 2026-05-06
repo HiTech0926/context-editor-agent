@@ -1,0 +1,74 @@
+name: Build desktop apps
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            script: dist:win
+            artifact: hashcode-windows-x64
+          - name: macOS Intel x64
+            os: macos-15-intel
+            script: dist:mac:intel
+            artifact: hashcode-macos-intel-x64
+          - name: Linux x64
+            os: ubuntu-latest
+            script: dist:linux
+            artifact: hashcode-linux-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        if: runner.os != 'Windows'
+        run: |
+          python -m venv .venv
+          ./.venv/bin/python -m pip install --upgrade pip
+          ./.venv/bin/python -m pip install -r requirements.txt
+
+      - name: Install Python dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python -m pip install --upgrade pip
+          .\.venv\Scripts\python -m pip install -r requirements.txt
+
+      - name: Build
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run ${{ matrix.script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/**
+          if-no-files-found: error

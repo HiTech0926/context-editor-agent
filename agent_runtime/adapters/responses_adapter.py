@@ -19,6 +19,7 @@ class ResponsesStreamResult:
     output_text: str
     function_calls: list[Any]
     finish_reason: str | None = None
+    canonical_items: Sequence[Any] = ()
 
 
 class ResponsesAdapter(BaseAdapter[dict[str, Any]]):

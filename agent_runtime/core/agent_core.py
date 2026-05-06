@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, MutableSequence
+from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any, Generic, Protocol, TypeVar
 
 
 class StreamResultLike(Protocol):
     output_text: str
     function_calls: list[Any]
+    canonical_items: Sequence[Any]
 
 
 class ToolExecutionLike(Protocol):
@@ -124,6 +125,13 @@ class AgentCore(Generic[ToolEventT]):
                 self._check_cancelled()
                 on_round_reset()
 
+            provider_items = list(getattr(response, "canonical_items", ()) or ())
+            if provider_items:
+                turn_items.extend(self.sanitize_value(provider_items))
+            else:
+                for call in response.function_calls:
+                    turn_items.append(self._function_call_item(call))
+
             for call in response.function_calls:
                 self._check_cancelled()
                 tool_event = self._execute_tool_call(call, turn_items)
@@ -210,14 +218,6 @@ class AgentCore(Generic[ToolEventT]):
 
         turn_items.append(
             {
-                "type": "function_call",
-                "call_id": safe_call_id,
-                "name": safe_call_name,
-                "arguments": safe_call_arguments,
-            }
-        )
-        turn_items.append(
-            {
                 "type": "function_call_output",
                 "call_id": safe_call_id,
                 "output": result,
@@ -225,6 +225,14 @@ class AgentCore(Generic[ToolEventT]):
         )
 
         return tool_event
+
+    def _function_call_item(self, call: Any) -> dict[str, Any]:
+        return {
+            "type": "function_call",
+            "call_id": self.sanitize_text(getattr(call, "call_id", "")),
+            "name": self.sanitize_text(getattr(call, "name", "")),
+            "arguments": self.sanitize_text(getattr(call, "arguments", "") or "{}"),
+        }
 
     def _check_cancelled(self) -> None:
         if self.check_cancelled is not None:

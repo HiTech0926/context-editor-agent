@@ -885,6 +885,13 @@ textarea {
   align-items: flex-end;
 }
 
+.context-map-item.system .context-map-item-button,
+.context-map-item.developer .context-map-item-button,
+.context-map-item.compaction .context-map-item-button,
+.context-map-item.context .context-map-item-button {
+  align-items: flex-start;
+}
+
 .context-node-row.hovered .context-map-item-button {
   background: rgba(255, 255, 255, 0.03);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
@@ -970,6 +977,13 @@ textarea {
 .context-map-item.user .map-bubble {
   width: fit-content;
   max-width: 100%;
+}
+
+.context-map-item.system .map-bubble,
+.context-map-item.developer .map-bubble,
+.context-map-item.compaction .map-bubble,
+.context-map-item.context .map-bubble {
+  border-color: rgba(var(--an-theme-rgb), 0.22);
 }
 
 .map-preview-text {

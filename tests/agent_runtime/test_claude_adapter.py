@@ -4,6 +4,7 @@ import pytest
 
 from agent_runtime.adapters.base import ProviderRequestContext
 from agent_runtime.adapters.claude_adapter import ClaudeAdapter
+from agent_runtime.core.stream_events import ProviderDoneEvent, ToolCallReadyEvent
 from simple_agent.agent import SimpleAgent
 
 
@@ -94,6 +95,29 @@ def test_claude_agent_allows_image_content_parts_before_adapter_translation() ->
     )
 
 
+def test_claude_agent_allows_preserved_thinking_and_tool_use_parts() -> None:
+    agent = SimpleAgent.__new__(SimpleAgent)
+    agent.provider_type = "claude"
+
+    agent._assert_supported_content_parts(
+        [
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "x", "signature": "sig"},
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_1",
+                        "name": "read_file",
+                        "input": {"path": "README.md"},
+                    },
+                ],
+            }
+        ]
+    )
+
+
 def test_claude_rejects_unsupported_image_media_types() -> None:
     adapter = ClaudeAdapter(client=object())
 
@@ -115,3 +139,136 @@ def test_claude_rejects_unsupported_image_media_types() -> None:
                 ),
             )
         )
+
+
+def test_build_request_preserves_claude_thinking_blocks_before_tool_result() -> None:
+    adapter = ClaudeAdapter(client=object())
+
+    request = adapter.build_request(
+        ProviderRequestContext(
+            model="claude-sonnet-4-5",
+            current_turn=(
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": "Need to inspect the file.",
+                            "signature": "signed-thinking",
+                        },
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_1",
+                            "name": "read_file",
+                            "input": {"path": "README.md"},
+                        },
+                    ],
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "toolu_1",
+                    "output": "contents",
+                },
+            ),
+        )
+    )
+
+    assert request["messages"] == [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "Need to inspect the file.",
+                    "signature": "signed-thinking",
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "read_file",
+                    "input": {"path": "README.md"},
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_1",
+                    "content": "contents",
+                }
+            ],
+        },
+    ]
+
+
+def test_stream_response_canonical_items_include_thinking_signature_and_tool_use() -> None:
+    adapter = ClaudeAdapter(client=object())
+
+    events = list(
+        adapter._stream_events(
+            [
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "thinking", "thinking": ""},
+                },
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "thinking_delta", "thinking": "Use the tool."},
+                },
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "signature_delta", "signature": "sig"},
+                },
+                {"type": "content_block_stop", "index": 0},
+                {
+                    "type": "content_block_start",
+                    "index": 1,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": "toolu_1",
+                        "name": "read_file",
+                        "input": {},
+                    },
+                },
+                {
+                    "type": "content_block_delta",
+                    "index": 1,
+                    "delta": {
+                        "type": "input_json_delta",
+                        "partial_json": '{"path":"README.md"}',
+                    },
+                },
+                {"type": "content_block_stop", "index": 1},
+                {"type": "message_stop"},
+            ]
+        )
+    )
+
+    assert any(isinstance(event, ToolCallReadyEvent) for event in events)
+    done = next(event for event in events if isinstance(event, ProviderDoneEvent))
+
+    assert done.canonical_items == (
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "Use the tool.",
+                    "signature": "sig",
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "read_file",
+                    "input": {"path": "README.md"},
+                },
+            ],
+        },
+    )

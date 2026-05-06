@@ -10,7 +10,7 @@ export interface ContextTokenThresholds {
 export interface ContextMessageTokenStat {
   nodeIndex: number;
   nodeNumber: number;
-  role: 'user' | 'assistant';
+  role: string;
   tokens: number;
   toolTokens: number;
   weightClass: ContextTokenWeightClass;
