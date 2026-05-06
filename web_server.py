@@ -700,6 +700,7 @@ class AppState:
         answer: str,
         tool_events: list[ToolEvent],
         assistant_blocks: list[dict[str, object]] | None = None,
+        assistant_provider_items: list[dict[str, Any]] | None = None,
         user_attachments: list[dict[str, object]] | None = None,
     ) -> None:
         with self.lock:
@@ -716,6 +717,16 @@ class AppState:
             assistant_text = message_blocks_to_text(safe_assistant_blocks) or sanitize_text(answer)
             assistant_record_index = user_record_index + 1
             assistant_tool_events = [serialize_tool_event(event) for event in tool_events]
+            safe_assistant_provider_items = normalize_provider_items(assistant_provider_items)
+            if not safe_assistant_provider_items:
+                safe_assistant_provider_items = build_provider_items_for_record(
+                    role="assistant",
+                    text=assistant_text,
+                    attachments=[],
+                    tool_events=assistant_tool_events,
+                    blocks=safe_assistant_blocks,
+                    record_index=assistant_record_index,
+                )
             session.transcript.append(
                 {
                     "role": "user",
@@ -740,14 +751,7 @@ class AppState:
                     "attachments": [],
                     "toolEvents": assistant_tool_events,
                     "blocks": safe_assistant_blocks,
-                    "providerItems": build_provider_items_for_record(
-                        role="assistant",
-                        text=assistant_text,
-                        attachments=[],
-                        tool_events=assistant_tool_events,
-                        blocks=safe_assistant_blocks,
-                        record_index=assistant_record_index,
-                    ),
+                    "providerItems": safe_assistant_provider_items,
                 }
             )
             ensure_initial_context_revision(session)
@@ -1586,6 +1590,15 @@ def normalize_provider_items(raw_items: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def assistant_provider_items_from_history_slice(raw_items: Any) -> list[dict[str, Any]]:
+    provider_items = normalize_provider_items(raw_items)
+    if provider_items and sanitize_text(provider_items[0].get("type") or "").strip() == "message":
+        first_role = sanitize_text(provider_items[0].get("role") or "").strip()
+        if first_role == "user":
+            provider_items = provider_items[1:]
+    return provider_items
+
+
 def sanitize_provider_input_item(raw_item: Any) -> dict[str, Any] | None:
     if not isinstance(raw_item, dict):
         return None
@@ -1903,7 +1916,7 @@ def normalize_transcript(raw_records: Any) -> list[dict[str, object]]:
         if not safe_text:
             safe_text = message_blocks_to_text(blocks)
 
-        provider_items = build_provider_items_for_record(
+        provider_items = normalized_provider_items or build_provider_items_for_record(
             role=role,
             text=safe_text,
             attachments=normalized_attachments,
@@ -6088,6 +6101,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     )
 
                 try:
+                    agent_history_start = len(session.agent.history)
                     answer, tool_events = session.agent.run_turn(
                         message,
                         attachments=agent_attachments,
@@ -6106,6 +6120,9 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     )
                     raise_if_cancelled()
                     think_parser.finish()
+                    assistant_provider_items = assistant_provider_items_from_history_slice(
+                        session.agent.history[agent_history_start:]
+                    )
                     tool_events_payload = [serialize_tool_event(event) for event in tool_events]
                     if not assistant_blocks:
                         assistant_blocks = blocks_from_text_and_tools(
@@ -6124,6 +6141,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                         answer=display_answer,
                         tool_events=tool_events,
                         assistant_blocks=assistant_blocks,
+                        assistant_provider_items=assistant_provider_items,
                         user_attachments=transcript_attachments,
                     )
                     turn_persisted = True
@@ -6179,12 +6197,16 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                     self.app_state.update_session_context_input(session, input_items)
 
                 try:
+                    agent_history_start = len(session.agent.history)
                     answer, tool_events = session.agent.run_turn(
                         message,
                         attachments=agent_attachments,
                         model=model,
                         reasoning_effort=reasoning_effort,
                         on_request_input=handle_request_input,
+                    )
+                    assistant_provider_items = assistant_provider_items_from_history_slice(
+                        session.agent.history[agent_history_start:]
                     )
                     tool_events_payload = [serialize_tool_event(event) for event in tool_events]
                     assistant_blocks = blocks_from_text_and_tools(
@@ -6201,6 +6223,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
                         answer=display_answer,
                         tool_events=tool_events,
                         assistant_blocks=assistant_blocks,
+                        assistant_provider_items=assistant_provider_items,
                         user_attachments=transcript_attachments,
                     )
                     self._send_json(

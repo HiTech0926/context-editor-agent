@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from simple_agent.agent import ToolEvent
-from web_server import AppState, SessionState
+from web_server import AppState, SessionState, normalize_transcript
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -198,6 +198,55 @@ def test_append_turn_adds_only_user_and_assistant_records_for_tool_scenarios() -
         )
 
         assert_turn_shape(session.transcript, expected_tool_count=len(turn["tool_events"]))
+
+
+def test_append_turn_preserves_claude_thinking_provider_items() -> None:
+    app_state = InMemoryAppState()
+    session = make_session()
+    app_state.sessions[session.session_id] = session
+    app_state.chat_session_ids.append(session.session_id)
+    provider_items = [
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "thinking",
+                    "thinking": "Need to inspect the file.",
+                    "signature": "signed-thinking",
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "read_file",
+                    "input": {"path": "README.md"},
+                },
+            ],
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "toolu_1",
+            "output": "contents",
+        },
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": "done",
+        },
+    ]
+
+    app_state.append_turn(
+        session,
+        user_message="read README",
+        answer="done",
+        tool_events=[],
+        assistant_blocks=[{"kind": "text", "text": "done"}],
+        assistant_provider_items=provider_items,
+    )
+
+    assistant_record = session.transcript[1]
+    assert assistant_record["providerItems"] == provider_items
+    assert normalize_transcript(session.transcript)[1]["providerItems"] == provider_items
 
 
 def test_transcript_fixtures_keep_provider_protocol_inside_assistant_record() -> None:
