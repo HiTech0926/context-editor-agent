@@ -37,6 +37,10 @@
 
 如果你想参与测试、反馈问题、贡献想法，或者一起把这个方向做下去，可以邮件联系：<a href="mailto:3455744878@qq.com">3455744878@qq.com</a>。
 
+### Codex 版
+
+Codex 版已上线。如果你在使用 Codex，也想获得同样的上下文编辑工作流，可以查看 [codex-context-editor-proxy](https://github.com/HaShiShark/codex-context-editor-proxy)。
+
 ---
 
 ## 🤔 问题在哪
