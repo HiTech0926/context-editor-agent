@@ -17,7 +17,7 @@ jobs:
         include:
           - name: Windows x64
             os: windows-latest
-            script: dist:win
+            script: dist:win:ci
             artifact: hashcode-windows-x64
           - name: macOS Intel x64
             os: macos-15-intel

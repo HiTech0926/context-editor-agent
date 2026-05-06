@@ -18,9 +18,10 @@
     "build:react": "vite build --config react_app/vite.config.ts",
     "preview:react": "vite preview --config react_app/vite.config.ts",
     "dist": "npm run dist:win",
-    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win --x64",
-    "dist:mac:intel": "npm run build:react && CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --x64",
-    "dist:linux": "npm run build:react && npx electron-builder --linux --x64"
+    "dist:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win nsis --x64 --publish never",
+    "dist:win:ci": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& npm run build:react && npx electron-builder --win zip --x64 --publish never",
+    "dist:mac:intel": "npm run build:react && CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac zip --x64 --publish never",
+    "dist:linux": "npm run build:react && npx electron-builder --linux tar.gz --x64 --publish never"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
@@ -74,9 +75,8 @@
       "forceCodeSigning": false
     },
     "mac": {
-      "icon": "electron/assets/hash-icon.png",
+      "icon": "electron/assets/hash-icon.icns",
       "target": [
-        "dmg",
         "zip"
       ],
       "category": "public.app-category.developer-tools",
