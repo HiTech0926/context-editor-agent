@@ -391,9 +391,10 @@ export default function ContextWorkbench({
   const localSuggestionNodes = useMemo(
     () =>
       messageTokenStats
+        .filter((stat) => stat.isEditable && stat.editableNodeIndex !== null && stat.editableNodeNumber !== null)
         .map((stat): ContextWorkbenchSuggestionNode => ({
-          node_index: stat.nodeIndex,
-          node_number: stat.nodeNumber,
+          node_index: stat.editableNodeIndex ?? 0,
+          node_number: stat.editableNodeNumber ?? 0,
           role: stat.role,
           token_count: stat.tokens,
           tool_token_count: stat.toolTokens,

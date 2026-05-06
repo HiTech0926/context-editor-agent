@@ -54,6 +54,18 @@
   background: var(--item-hover);
 }
 
+.context-node-gutter-readonly {
+  color: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.context-node-gutter-readonly:hover,
+.context-node-gutter-readonly:focus-visible {
+  color: transparent;
+  background: transparent;
+}
+
 .context-node-gutter:active {
   transform: scale(0.96);
 }

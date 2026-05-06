@@ -10,6 +10,9 @@ export interface ContextTokenThresholds {
 export interface ContextMessageTokenStat {
   nodeIndex: number;
   nodeNumber: number;
+  editableNodeIndex: number | null;
+  editableNodeNumber: number | null;
+  isEditable: boolean;
   role: string;
   tokens: number;
   toolTokens: number;

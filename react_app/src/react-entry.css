@@ -5927,6 +5927,13 @@ html[data-theme-mode] .context-node-gutter:focus-visible {
   background: var(--item-hover);
 }
 
+html[data-theme-mode] .context-node-gutter-readonly,
+html[data-theme-mode] .context-node-gutter-readonly:hover,
+html[data-theme-mode] .context-node-gutter-readonly:focus-visible {
+  color: transparent;
+  background: transparent;
+}
+
 html[data-theme-mode] .context-node-row.hovered .context-map-item-button,
 html[data-theme-mode] .context-map-item-button:hover {
   background: var(--item-hover);

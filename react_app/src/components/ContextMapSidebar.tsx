@@ -118,18 +118,27 @@ function getContextNodeClassName(role: MessageRecord['role']) {
   return role === 'an' ? 'assistant' : role;
 }
 
+function isEditableContextNode(role: MessageRecord['role']) {
+  return role === 'user' || role === 'an';
+}
+
 function buildRangeSelection(
   startIndex: number,
   endIndex: number,
   baseSelection: Set<number>,
   mode: 'replace' | 'add',
+  selectableIndexes: Set<number>,
 ) {
-  const next = mode === 'add' ? new Set(baseSelection) : new Set<number>();
+  const next = mode === 'add'
+    ? new Set([...baseSelection].filter((index) => selectableIndexes.has(index)))
+    : new Set<number>();
   const rangeStart = Math.min(startIndex, endIndex);
   const rangeEnd = Math.max(startIndex, endIndex);
 
   for (let index = rangeStart; index <= rangeEnd; index += 1) {
-    next.add(index);
+    if (selectableIndexes.has(index)) {
+      next.add(index);
+    }
   }
 
   return next;
@@ -198,27 +207,45 @@ export default function ContextMapSidebar({
   const [tokenThresholds, setTokenThresholds] = useState<ContextTokenThresholds>(DEFAULT_CONTEXT_TOKEN_THRESHOLDS);
   const showMinimap = stage === 2;
 
-  const messageStatBase = useMemo<MessageStatBase[]>(() => messages.map((message, index) => {
-    const tokens = countTokens(getContextWeightSource(message));
-    const toolTokens = countTokens(getContextToolWeightSource(message));
-    const roleName = getContextNodeRoleName(message.role);
-    const size = (tokens / 1000).toFixed(1);
+  const messageStatBase = useMemo<MessageStatBase[]>(() => {
+    let editableNodeCursor = 0;
 
-    return {
-      nodeIndex: index,
-      nodeNumber: index + 1,
-      role: roleName,
-      label: `${roleName}: ${size}k`,
-      previewText: getMessagePreviewText(message),
-      tokens,
-      toolTokens,
-    };
-  }), [messages]);
+    return messages.map((message, index) => {
+      const tokens = countTokens(getContextWeightSource(message));
+      const toolTokens = countTokens(getContextToolWeightSource(message));
+      const roleName = getContextNodeRoleName(message.role);
+      const size = (tokens / 1000).toFixed(1);
+      const isEditable = isEditableContextNode(message.role);
+      const editableNodeIndex = isEditable ? editableNodeCursor : null;
+      const editableNodeNumber = editableNodeIndex === null ? null : editableNodeIndex + 1;
+
+      if (isEditable) {
+        editableNodeCursor += 1;
+      }
+
+      return {
+        nodeIndex: index,
+        nodeNumber: editableNodeNumber ?? 0,
+        editableNodeIndex,
+        editableNodeNumber,
+        isEditable,
+        role: roleName,
+        label: `${roleName}: ${size}k`,
+        previewText: getMessagePreviewText(message),
+        tokens,
+        toolTokens,
+      };
+    });
+  }, [messages]);
 
   const messageStats = useMemo<MessageStat[]>(() => messageStatBase.map((stats) => ({
     ...stats,
     weightClass: getContextTokenWeightClass(stats.tokens, tokenThresholds),
   })), [messageStatBase, tokenThresholds]);
+  const editableMessageIndexes = useMemo(
+    () => new Set(messageStats.filter((stats) => stats.isEditable).map((stats) => stats.nodeIndex)),
+    [messageStats],
+  );
 
   const scrollRange = Math.max(scrollMetrics.scrollHeight - scrollMetrics.clientHeight, 0);
   const scrollRatio = scrollRange <= 0 ? 0 : scrollMetrics.scrollTop / scrollRange;
@@ -345,13 +372,13 @@ export default function ContextMapSidebar({
     setSelectedIndexes((previous) => {
       const next = new Set<number>();
       previous.forEach((index) => {
-        if (index >= 0 && index < messages.length) {
+        if (index >= 0 && index < messages.length && editableMessageIndexes.has(index)) {
           next.add(index);
         }
       });
       return next;
     });
-  }, [messages]);
+  }, [editableMessageIndexes, messages]);
 
   useEffect(() => {
     if (stage === 1) {
@@ -633,7 +660,7 @@ export default function ContextMapSidebar({
     dragState.pointerClientY = clientY;
 
     const targetIndex = getNodeIndexFromClientY(clientY);
-    if (targetIndex === null) {
+    if (targetIndex === null || !editableMessageIndexes.has(targetIndex)) {
       return;
     }
 
@@ -659,6 +686,7 @@ export default function ContextMapSidebar({
         targetIndex,
         dragState.originSelection,
         dragState.mode,
+        editableMessageIndexes,
       ),
     );
   }
@@ -693,6 +721,10 @@ export default function ContextMapSidebar({
   }
 
   function handleGutterMouseDown(index: number, event: ReactMouseEvent<HTMLButtonElement>) {
+    if (!editableMessageIndexes.has(index)) {
+      return;
+    }
+
     if (event.button !== 0) {
       return;
     }
@@ -713,6 +745,10 @@ export default function ContextMapSidebar({
   }
 
   function handleGutterKeyDown(index: number, event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (!editableMessageIndexes.has(index)) {
+      return;
+    }
+
     if (event.key !== 'Enter' && event.key !== ' ') {
       return;
     }
@@ -819,13 +855,16 @@ export default function ContextMapSidebar({
   }
 
   const selectedNodeIndexes = useMemo(
-    () => [...selectedIndexes].sort((left, right) => left - right),
-    [selectedIndexes],
+    () => [...selectedIndexes]
+      .sort((left, right) => left - right)
+      .map((index) => messageStats[index]?.editableNodeIndex)
+      .filter((index): index is number => index !== null && index !== undefined),
+    [messageStats, selectedIndexes],
   );
   const criticalNodeIndexes = useMemo(
     () => messageStats
-      .map((stats, index) => (stats.weightClass === 'heavy' ? index : -1))
-      .filter((index) => index >= 0),
+      .map((stats) => (stats.isEditable && stats.weightClass === 'heavy' ? stats.editableNodeIndex : -1))
+      .filter((index): index is number => typeof index === 'number' && index >= 0),
     [messageStats],
   );
 
@@ -860,7 +899,8 @@ export default function ContextMapSidebar({
                     const stats = messageStats[index];
                     const canExpand = canExpandMessage(message, stats.previewText);
                     const canToggleExpand = stage !== 1 && canExpand;
-                    const canJumpToChat = stage === 1;
+                    const canSelect = stats.isEditable;
+                    const canJumpToChat = stage === 1 && canSelect;
                     const isInteractive = canToggleExpand || canJumpToChat;
                     const selectedClass = isSelected ? 'selected' : '';
 
@@ -870,17 +910,21 @@ export default function ContextMapSidebar({
                         key={`${message.role}-${index}`}
                         ref={(node) => setNodeRef(index, node)}
                       >
-                      {stage !== 1 ? (
+                      {stage !== 1 && canSelect ? (
                         <button
                           className="context-node-gutter"
                           type="button"
                           onMouseDown={(event) => handleGutterMouseDown(index, event)}
                           onKeyDown={(event) => handleGutterKeyDown(index, event)}
-                          aria-label={`选择第 ${index + 1} 个节点`}
+                          aria-label={`选择 Node #${stats.editableNodeNumber ?? ''}`}
                           aria-pressed={isSelected}
                         >
-                          <span>{index + 1}</span>
+                          <span>{stats.editableNodeNumber}</span>
                         </button>
+                      ) : stage !== 1 ? (
+                        <div className="context-node-gutter context-node-gutter-readonly" aria-hidden="true">
+                          <span />
+                        </div>
                       ) : null}
 
                       <div
@@ -888,14 +932,14 @@ export default function ContextMapSidebar({
                       >
                         <button
                           aria-expanded={canToggleExpand ? isExpanded : undefined}
-                          aria-label={canJumpToChat ? `跳转到主聊天第 ${index + 1} 条消息` : undefined}
+                          aria-label={canJumpToChat ? `跳转到 Node #${stats.editableNodeNumber ?? ''}` : undefined}
                           className={`context-map-item-button ${isInteractive ? '' : 'non-expandable'}`}
                           type="button"
                           onClick={
                             isInteractive
                               ? () => {
                                   if (canJumpToChat) {
-                                    onJumpToMessage(index);
+                                    onJumpToMessage(stats.editableNodeIndex ?? index);
                                     return;
                                   }
 
@@ -970,7 +1014,9 @@ export default function ContextMapSidebar({
                               event.stopPropagation();
                               scrollToNode(index);
                             }}
-                            aria-label={`定位到第 ${index + 1} 个节点，约 ${stats.tokens} 个 token`}
+                            aria-label={stats.editableNodeNumber
+                              ? `定位到 Node #${stats.editableNodeNumber}，约 ${stats.tokens} 个 token`
+                              : `定位到 ${stats.role} 节点，约 ${stats.tokens} 个 token`}
                           />
                         );
                       })}
