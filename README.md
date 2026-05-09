@@ -313,9 +313,6 @@ This project is in early alpha. Contributions, ideas, and bug reports are very w
 
 ---
 
-## 📄 License
-
-MIT — do whatever you want with it.
 
 ---
 
