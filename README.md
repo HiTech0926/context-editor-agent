@@ -37,6 +37,10 @@
 
 If you want to test hashcode, contribute ideas, report bugs, or build this direction together, email us at <a href="mailto:3455744878@qq.com">3455744878@qq.com</a>.
 
+### Codex Version
+
+The Codex version is now available. If you use Codex and want the same context editing workflow, check out [codex-context-editor-proxy](https://github.com/HaShiShark/codex-context-editor-proxy).
+
 ---
 
 ## 🤔 The Problem
