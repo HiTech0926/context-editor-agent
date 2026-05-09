@@ -31,7 +31,6 @@ from simple_agent.tools import ToolExecution
 
 
 REPO_ROOT = Path(__file__).resolve().parent
-DEFAULT_PAGE = REPO_ROOT / "hash.html"
 REACT_DIST_DIR = REPO_ROOT / "react_app" / "dist"
 RAW_STATE_DIR = Path(os.getenv("HASH_DATA_DIR", str(REPO_ROOT / "data"))).expanduser()
 STATE_DIR = RAW_STATE_DIR if RAW_STATE_DIR.is_absolute() else (REPO_ROOT / RAW_STATE_DIR).resolve()
@@ -6248,9 +6247,7 @@ class HashHTTPRequestHandler(BaseHTTPRequestHandler):
 
     def _serve_static(self, request_path: str) -> None:
         normalized_path = request_path or "/"
-        if normalized_path in {"/", "/hash.html"}:
-            file_path = DEFAULT_PAGE
-        elif normalized_path in {"/react", "/react/", "/react/index.html"}:
+        if normalized_path in {"/", "/react", "/react/", "/react/index.html"}:
             file_path = self._resolve_react_asset("index.html")
             if file_path is None:
                 return

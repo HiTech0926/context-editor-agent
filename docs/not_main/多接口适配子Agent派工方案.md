@@ -658,7 +658,7 @@ type ProviderCapabilities = {
 - [react_app/src/api.ts](</path/to/hash-code/react_app/src/api.ts>)
 - [react_app/src/types.ts](</path/to/hash-code/react_app/src/types.ts>)
 - [react_app/src/react-entry.css](</path/to/hash-code/react_app/src/react-entry.css>)
-- [static/css/style.css](</path/to/hash-code/static/css/style.css>)
+- [react_app/src/legacy-style.css](</path/to/hash-code/react_app/src/legacy-style.css>)
 
 ### 禁改文件
 
