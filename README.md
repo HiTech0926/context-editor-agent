@@ -45,13 +45,19 @@ The Codex version is now available. If you use Codex and want the same context e
 
 ## 🤔 The Problem
 
-Every AI chat app lets you **send** messages. None of them lets you **see what the model actually sees**.
+Your conversations with AI constantly shift direction. The topic has moved on, but previous discussions and tool outputs are still sitting in the context. Sure, `/compact` can compress things, but it's too blunt — you can't choose what stays and what goes.
 
-Your context window is a black box. You can't see it. You can't edit it. You can't roll it back. When your conversation gets long, the AI silently degrades — and you have zero control over why. Even tools that offer `/compact` are too blunt and aggressive.
+**The real problem isn't that the context is "too long". It's that you have zero control over it.**
 
-> **What if your LLM's context window was treated like source code — visible, editable, and version-controlled?**
+This happens all the time in real usage:
 
-That's what this project does.
+- 🔄 **Topic switching** — You just finished debugging a bug with AI, then started a high-quality project discussion. But the context is already dominated by the bug fix. Continuing might trigger aggressive compression and attention degradation. You want to stay in flow, but you can't precisely compress just the earlier content.
+- 📦 **Irrelevant content buildup** — After 30 turns, tool outputs from much earlier are completely irrelevant now. They're still hogging the context and slowing the model down, and you don't even know exactly where they are.
+- 🔍 **Context diagnostics** — The context fills up surprisingly fast and you want to know why. Traditional tools only tell you "how much window is left" — they can't help you pinpoint which nodes are eating space or fix them.
+
+> **What if you could see, edit, and version-control your AI's context like source code?**
+
+That's what hashcode does.
 
 ## 💡 The Idea
 
@@ -66,10 +72,10 @@ Us:        AI  →  edits  →  AI's Context  🪆
 **hashcode** is the first desktop client that:
 
 1. **Visualizes** the entire context your main model actually consumes — as a structured **Context Map**, not a chat log.
-2. **Deploys a second AI model** that can inspect, compress, rewrite, and delete items inside the context — just like a code editor's AI assistant.
+2. **Deploys a second AI model** to precisely edit your context — you decide what to keep, what to delete, what to compress, instead of handing it off to a blunt compact command.
 3. **Version-controls** every edit, so you can roll back to any previous context state.
 
-One AI doing the thinking. Another AI grooming what the first one sees. 🪆
+One AI doing the thinking. Another AI grooming what the first one sees — under your control. 🪆
 
 ---
 
@@ -272,15 +278,11 @@ The installer is generated in the `release/` directory. Double-click to install,
 ## ❓ FAQ
 
 <details>
-<summary><strong>How is this different from Claude Code and Codex?</strong></summary>
+<summary><strong>How is this different from Claude Code / Codex's /compact?</strong></summary>
 
-Claude Code and Codex both have context compression capabilities, but users have no way of knowing how the compression works, what was compressed, what the context actually contains after compression, or whether the model still remembers a previous issue.
+compact is a black box — you don't know what it compressed, what it kept, and you can't roll it back. It solves "context too long", but it doesn't solve "there's stuff in my context I don't want".
 
-Real-world examples:
-1. During task execution, you want to ask a simple question but are afraid of polluting the main context
-2. Occasionally, large amounts of useless error logs end up in the context with no way to selectively remove them
-
-hashcode treats the context window as an **editable document**. You can see every token the model will consume, remove bloated tool outputs, compress old turns, or roll back to earlier states — all without losing your conversation.
+hashcode is about **context freedom**: you can see how many tokens each node takes, precisely delete a specific tool output, compress a few old conversation turns, or clean up earlier content in one sentence when switching topics — and roll back anytime. Not brute-force compression. Precise control.
 
 </details>
 
