@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -264,11 +264,6 @@ function isAbortError(error: unknown) {
 
 function localizeToolCatalogItem(tool: ContextWorkbenchToolCatalogItem) {
   switch (tool.id) {
-    case 'preview_context_selection':
-      return {
-        label: '查看概览',
-        description: '查看当前选中节点，或者先基于整份快照做一轮概览判断。',
-      };
     case 'get_context_node_details':
       return {
         label: '展开节点详情',
@@ -298,6 +293,11 @@ function localizeToolCatalogItem(tool: ContextWorkbenchToolCatalogItem) {
       return {
         label: '删除节点',
         description: '从当前工作快照里删除一个或多个节点。',
+      };
+    case 'confirm_working_snapshot':
+      return {
+        label: '最终确认',
+        description: '在本轮编辑都完成后，确认当前工作快照里所有仍然有效的节点概览。',
       };
     default:
       return {
@@ -810,14 +810,16 @@ export default function ContextWorkbench({
         session_id: sessionId,
         revision_id: revisionId,
       });
-      onHistoryChange(sessionId, response.history || []);
-      onConversationChange(sessionId, normalizeConversation(response.conversation));
-      if (response.context_input) {
-        onContextInputChange(sessionId, normalizeConversation(response.context_input));
-      }
-      onRevisionHistoryChange(sessionId, response.revisions || []);
-      onPendingRestoreChange(sessionId, response.pending_restore || null);
-      setManualMessages(buildManualMessagesFromHistory(response.history || []));
+      startTransition(() => {
+        onHistoryChange(sessionId, response.history || []);
+        onConversationChange(sessionId, normalizeConversation(response.conversation));
+        if (response.context_input) {
+          onContextInputChange(sessionId, normalizeConversation(response.context_input));
+        }
+        onRevisionHistoryChange(sessionId, response.revisions || []);
+        onPendingRestoreChange(sessionId, response.pending_restore || null);
+        setManualMessages(buildManualMessagesFromHistory(response.history || []));
+      });
     } catch (error) {
       setRestoreError(getThrownMessage(error));
     } finally {

@@ -100,11 +100,52 @@ textarea {
   width: min(100%, var(--chat-shell-width));
 }
 
+.message-deferred-preview {
+  display: -webkit-box;
+  max-width: min(100%, var(--chat-shell-width));
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: normal;
+}
+
 .markdown-body {
   color: inherit;
   font-size: 17px;
   line-height: 1.75;
   word-break: break-word;
+}
+
+.markdown-large-document {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.markdown-large-document-toggle {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.markdown-large-document-toggle:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.markdown-large-document-toggle:active {
+  transform: scale(0.98);
 }
 
 .markdown-body > * + * {

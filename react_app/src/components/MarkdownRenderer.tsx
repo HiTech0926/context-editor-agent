@@ -49,6 +49,9 @@ registeredLanguages.forEach(([name, language]) => {
 
 let mermaidInitialized = false;
 let mermaidModulePromise: Promise<typeof import('mermaid')> | null = null;
+const MAX_HIGHLIGHT_CODE_CHARS = 20000;
+const LARGE_MARKDOWN_CHARS = 60000;
+const LARGE_MARKDOWN_PREVIEW_CHARS = 12000;
 
 async function getMermaidModule() {
   if (!mermaidModulePromise) {
@@ -209,6 +212,17 @@ function CodeBlock(props: ComponentPropsWithoutRef<'code'>) {
   }
 
   const highlightLanguage = hljs.getLanguage(language) ? language : 'plaintext';
+  if (rawCode.length > MAX_HIGHLIGHT_CODE_CHARS) {
+    return (
+      <pre className="markdown-code-block">
+        <div className="markdown-code-block-bar">
+          <span>{highlightLanguage}</span>
+        </div>
+        <code className={`hljs language-${highlightLanguage}`}>{rawCode}</code>
+      </pre>
+    );
+  }
+
   const highlighted = hljs.highlight(rawCode, {
     language: highlightLanguage,
     ignoreIllegals: true,
@@ -246,8 +260,8 @@ function unwrapMarkdownFence(content: string): string {
   return fencedDocumentMatch[3];
 }
 
-export default function MarkdownRenderer({ content }: { content: string }) {
-  const deferredContent = useDeferredValue(unwrapMarkdownFence(content));
+function MarkdownDocument({ content }: { content: string }) {
+  const deferredContent = useDeferredValue(content);
 
   return (
     <div className="markdown-body">
@@ -275,4 +289,32 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       </ReactMarkdown>
     </div>
   );
+}
+
+function LargeMarkdownDocument({ content }: { content: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const previewContent = `${content.slice(0, LARGE_MARKDOWN_PREVIEW_CHARS).trimEnd()}\n\n...`;
+
+  return (
+    <div className="markdown-large-document">
+      <MarkdownDocument content={isExpanded ? content : previewContent} />
+      <button
+        className="markdown-large-document-toggle"
+        type="button"
+        onClick={() => setIsExpanded((previous) => !previous)}
+      >
+        {isExpanded ? '收起长内容' : `展开完整内容（约 ${content.length.toLocaleString('zh-CN')} 字）`}
+      </button>
+    </div>
+  );
+}
+
+export default function MarkdownRenderer({ content }: { content: string }) {
+  const unwrappedContent = unwrapMarkdownFence(content);
+
+  if (unwrappedContent.length > LARGE_MARKDOWN_CHARS) {
+    return <LargeMarkdownDocument content={unwrappedContent} />;
+  }
+
+  return <MarkdownDocument content={unwrappedContent} />;
 }

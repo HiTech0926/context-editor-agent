@@ -17,6 +17,8 @@ interface ParsedToolOutput {
   exitCode?: number;
 }
 
+const PREVIEW_SOURCE_LIMIT = 4000;
+
 function humanizeToolName(name?: string) {
   if (!name) {
     return '工具调用';
@@ -127,7 +129,8 @@ export function getMessagePreviewText(record: MessageRecord) {
     return '正在思考...';
   }
 
-  const plainText = stripMarkdownSyntax(getRecordText(record));
+  const previewSource = getRecordText(record).slice(0, PREVIEW_SOURCE_LIMIT);
+  const plainText = stripMarkdownSyntax(previewSource);
   if (plainText) {
     return plainText;
   }
@@ -253,9 +256,11 @@ function ToolInvocationBlock({
   const title = event.display_title || humanizeToolName(event.name);
   const detail = (event.display_detail || '').trim();
   const isShell = event.name === 'shell_command' || event.name === 'exec_command' || event.name === 'write_stdin';
-  const { prettyJson, shellOutput, exitCode } = parseToolOutput(event);
+  const parsedOutput = isDetailOpen ? parseToolOutput(event) : null;
   const shellStatusText = event.status === 'error' ? '失败' : '成功';
-  const safeShellOutput = shellOutput || event.display_result || '命令已执行，但没有输出。';
+  const safeShellOutput = parsedOutput?.shellOutput || event.display_result || '命令已执行，但没有输出。';
+  const prettyJson = parsedOutput?.prettyJson || event.output_preview || '{}';
+  const exitCode = parsedOutput?.exitCode;
   const shellPreview = truncateSingleLine(detail);
   const groupLabel = isShell ? '运行命令' : '调用了 1 个工具';
   const itemLabel = isShell ? '已运行命令' : title;
@@ -289,29 +294,31 @@ function ToolInvocationBlock({
           </button>
 
           <div className={`inline-tool-detail-panel ${isDetailOpen ? 'open' : ''}`}>
-            <div className="inline-tool-detail-inner">
-              {!isShell && detail ? <div className="inline-tool-detail-text">{detail}</div> : null}
+            {isDetailOpen ? (
+              <div className="inline-tool-detail-inner">
+                {!isShell && detail ? <div className="inline-tool-detail-text">{detail}</div> : null}
 
-              {isShell ? (
-                <div className="tool-shell-box">
-                  <div className="tool-shell-box-label">Shell</div>
-                  <div className="tool-shell-command">$ {detail || 'powershell command'}</div>
-                  <div className="tool-shell-scroll">
-                    <pre>{safeShellOutput}</pre>
+                {isShell ? (
+                  <div className="tool-shell-box">
+                    <div className="tool-shell-box-label">Shell</div>
+                    <div className="tool-shell-command">$ {detail || 'powershell command'}</div>
+                    <div className="tool-shell-scroll">
+                      <pre>{safeShellOutput}</pre>
+                    </div>
+                    <div className={`tool-shell-footer ${event.status === 'error' ? 'error' : 'success'}`}>
+                      {typeof exitCode === 'number' ? `退出码 ${exitCode} · ${shellStatusText}` : shellStatusText}
+                    </div>
                   </div>
-                  <div className={`tool-shell-footer ${event.status === 'error' ? 'error' : 'success'}`}>
-                    {typeof exitCode === 'number' ? `退出码 ${exitCode} · ${shellStatusText}` : shellStatusText}
+                ) : (
+                  <div className="tool-json-box">
+                    <div className="tool-json-box-label">json</div>
+                    <div className="tool-json-scroll">
+                      <pre>{prettyJson}</pre>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="tool-json-box">
-                  <div className="tool-json-box-label">json</div>
-                  <div className="tool-json-scroll">
-                    <pre>{prettyJson}</pre>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

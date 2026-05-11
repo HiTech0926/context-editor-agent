@@ -12,10 +12,28 @@ import type {
 } from './types';
 
 const encoding = getEncoding('cl100k_base');
+const MAX_EXACT_TOKEN_CHARS = 8000;
+
+function estimateTokenCount(text: string): number {
+  let cjkChars = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const codePoint = text.charCodeAt(index);
+    if (codePoint >= 0x3400 && codePoint <= 0x9fff) {
+      cjkChars += 1;
+    }
+  }
+
+  const otherChars = Math.max(text.length - cjkChars, 0);
+  return Math.ceil(cjkChars * 1.2 + otherChars / 4);
+}
 
 export function countTokens(text: string): number {
   if (!text) {
     return 0;
+  }
+
+  if (text.length > MAX_EXACT_TOKEN_CHARS) {
+    return estimateTokenCount(text);
   }
 
   try {

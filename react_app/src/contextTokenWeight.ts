@@ -1,4 +1,5 @@
 import type { MessageRecord } from './types';
+import { countTokens } from './utils';
 
 export type ContextTokenWeightClass = 'light' | 'medium' | 'heavy';
 
@@ -91,6 +92,66 @@ export function getContextToolWeightSource(message: MessageRecord) {
   });
 
   return parts.join('\n\n');
+}
+
+function countToolEventTokens(message: MessageRecord) {
+  return message.blocks.reduce((total, block) => {
+    if (block.kind !== 'tool') {
+      return total;
+    }
+
+    const event = block.tool_event;
+    const toolParts = [
+      event.display_title,
+      event.display_detail,
+      event.output_preview,
+      event.display_result,
+      event.raw_output,
+    ];
+
+    return toolParts.reduce((partTotal, value) => {
+      const text = String(value || '').trim();
+      return text ? partTotal + countTokens(text) : partTotal;
+    }, total);
+  }, 0);
+}
+
+export function countContextToolTokens(message: MessageRecord) {
+  return countToolEventTokens(message);
+}
+
+export function countContextMessageTokens(message: MessageRecord) {
+  let total = 0;
+
+  if (message.blocks.length) {
+    message.blocks.forEach((block) => {
+      if (block.kind === 'text') {
+        if (block.text.trim()) {
+          total += countTokens(block.text);
+        }
+        return;
+      }
+
+      if (block.kind === 'reasoning' || block.kind === 'thinking') {
+        return;
+      }
+
+      total += countToolEventTokens({
+        ...message,
+        blocks: [block],
+      });
+    });
+  }
+
+  if (total === 0 && message.text.trim()) {
+    total += countTokens(message.text);
+  }
+
+  if (message.attachments.length) {
+    total += countTokens(message.attachments.map((attachment) => attachment.name).join('\n'));
+  }
+
+  return total;
 }
 
 export function getContextWeightSource(message: MessageRecord) {

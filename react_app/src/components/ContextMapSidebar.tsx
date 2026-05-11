@@ -18,15 +18,14 @@ import type {
   ReasoningOption,
 } from '../types';
 import {
+  countContextMessageTokens,
+  countContextToolTokens,
   DEFAULT_CONTEXT_TOKEN_THRESHOLDS,
-  getContextToolWeightSource,
   getContextTokenWeightClass,
-  getContextWeightSource,
   type ContextTokenThresholds,
   type ContextMessageTokenStat,
   type ContextTokenWeightClass,
 } from '../contextTokenWeight';
-import { countTokens } from '../utils';
 
 interface ContextMapSidebarProps {
   stage: 0 | 1 | 2;
@@ -89,6 +88,23 @@ const SELECTION_AUTO_SCROLL_MAX_SPEED_PX = 14;
 
 function normalizePlainText(value: string) {
   return value.replace(/\r?\n+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function areScrollMetricsEqual(left: ScrollMetrics, right: ScrollMetrics) {
+  return left.clientHeight === right.clientHeight &&
+    left.scrollHeight === right.scrollHeight &&
+    left.scrollTop === right.scrollTop;
+}
+
+function areNodeLayoutsEqual(left: NodeLayout[], right: NodeLayout[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((layout, index) => {
+    const nextLayout = right[index];
+    return layout.top === nextLayout.top && layout.height === nextLayout.height;
+  });
 }
 
 function getMinimapBarHeightPx(role: MessageRecord['role'], weightClass: ContextTokenWeightClass) {
@@ -211,8 +227,8 @@ export default function ContextMapSidebar({
     let editableNodeCursor = 0;
 
     return messages.map((message, index) => {
-      const tokens = countTokens(getContextWeightSource(message));
-      const toolTokens = countTokens(getContextToolWeightSource(message));
+      const tokens = countContextMessageTokens(message);
+      const toolTokens = countContextToolTokens(message);
       const roleName = getContextNodeRoleName(message.role);
       const size = (tokens / 1000).toFixed(1);
       const isEditable = isEditableContextNode(message.role);
@@ -411,12 +427,13 @@ export default function ContextMapSidebar({
       }
 
       if (shouldVirtualizeList) {
-        setNodeLayouts([]);
-        setScrollMetrics({
+        const nextMetrics = {
           clientHeight: container.clientHeight || 1,
           scrollHeight: container.scrollHeight || 1,
           scrollTop: container.scrollTop,
-        });
+        };
+        setNodeLayouts((previous) => (previous.length ? [] : previous));
+        setScrollMetrics((previous) => (areScrollMetricsEqual(previous, nextMetrics) ? previous : nextMetrics));
         return;
       }
 
@@ -432,12 +449,14 @@ export default function ContextMapSidebar({
         };
       });
 
-      setNodeLayouts(nextLayouts);
-      setScrollMetrics({
+      const nextMetrics = {
         clientHeight: container.clientHeight || 1,
         scrollHeight: container.scrollHeight || 1,
         scrollTop: container.scrollTop,
-      });
+      };
+
+      setNodeLayouts((previous) => (areNodeLayoutsEqual(previous, nextLayouts) ? previous : nextLayouts));
+      setScrollMetrics((previous) => (areScrollMetricsEqual(previous, nextMetrics) ? previous : nextMetrics));
     }
 
     const frameId = window.requestAnimationFrame(measureNodes);
@@ -475,11 +494,12 @@ export default function ContextMapSidebar({
     const activeContainer = container;
 
     function syncScrollMetrics() {
-      setScrollMetrics({
+      const nextMetrics = {
         clientHeight: activeContainer.clientHeight || 1,
         scrollHeight: activeContainer.scrollHeight || 1,
         scrollTop: activeContainer.scrollTop,
-      });
+      };
+      setScrollMetrics((previous) => (areScrollMetricsEqual(previous, nextMetrics) ? previous : nextMetrics));
     }
 
     syncScrollMetrics();

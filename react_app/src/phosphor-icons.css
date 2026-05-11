@@ -1,0 +1,167 @@
+@font-face {
+  font-family: "Phosphor-Light";
+  src: url("../../node_modules/@phosphor-icons/web/src/light/Phosphor-Light.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Phosphor-Fill";
+  src: url("../../node_modules/@phosphor-icons/web/src/fill/Phosphor-Fill.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Phosphor-Bold";
+  src: url("../../node_modules/@phosphor-icons/web/src/bold/Phosphor-Bold.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.ph-light,
+.ph-fill,
+.ph-bold {
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ph-light {
+  font-family: "Phosphor-Light" !important;
+}
+
+.ph-fill {
+  font-family: "Phosphor-Fill" !important;
+}
+
+.ph-bold {
+  font-family: "Phosphor-Bold" !important;
+}
+
+.ph-light.ph-archive-box:before { content: "\e00e"; }
+.ph-light.ph-arrow-clockwise:before { content: "\e036"; }
+.ph-light.ph-arrow-counter-clockwise:before { content: "\e038"; }
+.ph-light.ph-arrow-left:before { content: "\e058"; }
+.ph-light.ph-arrow-up:before { content: "\e08e"; }
+.ph-light.ph-arrows-clockwise:before { content: "\e094"; }
+.ph-light.ph-brain:before { content: "\e74e"; }
+.ph-light.ph-caret-down:before { content: "\e136"; }
+.ph-light.ph-caret-right:before { content: "\e13a"; }
+.ph-light.ph-chat-teardrop-text:before { content: "\e178"; }
+.ph-light.ph-check:before { content: "\e182"; }
+.ph-light.ph-circle-notch:before { content: "\eb44"; }
+.ph-light.ph-copy:before { content: "\e1ca"; }
+.ph-light.ph-dots-three:before { content: "\e1fe"; }
+.ph-light.ph-eye:before { content: "\e220"; }
+.ph-light.ph-eye-slash:before { content: "\e224"; }
+.ph-light.ph-file-text:before { content: "\e23a"; }
+.ph-light.ph-folder:before { content: "\e24a"; }
+.ph-light.ph-folder-open:before { content: "\e256"; }
+.ph-light.ph-funnel:before { content: "\e266"; }
+.ph-light.ph-gear:before { content: "\e270"; }
+.ph-light.ph-globe-hemisphere-east:before { content: "\e28a"; }
+.ph-light.ph-globe-hemisphere-west:before { content: "\e28c"; }
+.ph-light.ph-hand-palm:before { content: "\e57e"; }
+.ph-light.ph-hand-pointing:before { content: "\e29a"; }
+.ph-light.ph-heart-straight:before { content: "\e2aa"; }
+.ph-light.ph-image:before { content: "\e2ca"; }
+.ph-light.ph-info:before { content: "\e2ce"; }
+.ph-light.ph-layout:before { content: "\e6d6"; }
+.ph-light.ph-lightbulb:before { content: "\e2dc"; }
+.ph-light.ph-list-bullets:before { content: "\e2f2"; }
+.ph-light.ph-magnifying-glass:before { content: "\e30c"; }
+.ph-light.ph-minus:before { content: "\e32a"; }
+.ph-light.ph-monitor:before { content: "\e32e"; }
+.ph-light.ph-moon:before { content: "\e330"; }
+.ph-light.ph-pencil-simple:before { content: "\e3b4"; }
+.ph-light.ph-plug:before { content: "\e946"; }
+.ph-light.ph-plus:before { content: "\e3d4"; }
+.ph-light.ph-pulse:before { content: "\e000"; }
+.ph-light.ph-push-pin:before { content: "\e3e2"; }
+.ph-light.ph-robot:before { content: "\e762"; }
+.ph-light.ph-shield-check:before { content: "\e40c"; }
+.ph-light.ph-sidebar-simple:before { content: "\ec24"; }
+.ph-light.ph-spinner-gap:before { content: "\e66c"; }
+.ph-light.ph-square:before { content: "\e45e"; }
+.ph-light.ph-stack:before { content: "\e466"; }
+.ph-light.ph-star-four:before { content: "\e6a4"; }
+.ph-light.ph-stop:before { content: "\e46c"; }
+.ph-light.ph-sun:before { content: "\e472"; }
+.ph-light.ph-thermometer:before { content: "\e5c6"; }
+.ph-light.ph-translate:before { content: "\e4a2"; }
+.ph-light.ph-trash:before { content: "\e4a6"; }
+.ph-light.ph-user:before { content: "\e4c2"; }
+.ph-light.ph-user-circle:before { content: "\e4c4"; }
+.ph-light.ph-waveform:before { content: "\e802"; }
+.ph-light.ph-wrench:before { content: "\e5d4"; }
+.ph-light.ph-x:before { content: "\e4f6"; }
+
+.ph-fill.ph-archive-box:before { content: "\e00e"; }
+.ph-fill.ph-arrow-clockwise:before { content: "\e036"; }
+.ph-fill.ph-arrow-counter-clockwise:before { content: "\e038"; }
+.ph-fill.ph-arrow-left:before { content: "\e058"; }
+.ph-fill.ph-arrow-up:before { content: "\e08e"; }
+.ph-fill.ph-arrows-clockwise:before { content: "\e094"; }
+.ph-fill.ph-brain:before { content: "\e74e"; }
+.ph-fill.ph-caret-down:before { content: "\e136"; }
+.ph-fill.ph-caret-right:before { content: "\e13a"; }
+.ph-fill.ph-chat-teardrop-text:before { content: "\e178"; }
+.ph-fill.ph-check:before { content: "\e182"; }
+.ph-fill.ph-circle-notch:before { content: "\eb44"; }
+.ph-fill.ph-copy:before { content: "\e1ca"; }
+.ph-fill.ph-dots-three:before { content: "\e1fe"; }
+.ph-fill.ph-eye:before { content: "\e220"; }
+.ph-fill.ph-eye-slash:before { content: "\e224"; }
+.ph-fill.ph-file-text:before { content: "\e23a"; }
+.ph-fill.ph-folder:before { content: "\e24a"; }
+.ph-fill.ph-folder-open:before { content: "\e256"; }
+.ph-fill.ph-funnel:before { content: "\e266"; }
+.ph-fill.ph-gear:before { content: "\e270"; }
+.ph-fill.ph-globe-hemisphere-east:before { content: "\e28a"; }
+.ph-fill.ph-globe-hemisphere-west:before { content: "\e28c"; }
+.ph-fill.ph-hand-palm:before { content: "\e57e"; }
+.ph-fill.ph-hand-pointing:before { content: "\e29a"; }
+.ph-fill.ph-heart-straight:before { content: "\e2aa"; }
+.ph-fill.ph-image:before { content: "\e2ca"; }
+.ph-fill.ph-info:before { content: "\e2ce"; }
+.ph-fill.ph-layout:before { content: "\e6d6"; }
+.ph-fill.ph-lightbulb:before { content: "\e2dc"; }
+.ph-fill.ph-list-bullets:before { content: "\e2f2"; }
+.ph-fill.ph-magnifying-glass:before { content: "\e30c"; }
+.ph-fill.ph-minus:before { content: "\e32a"; }
+.ph-fill.ph-monitor:before { content: "\e32e"; }
+.ph-fill.ph-moon:before { content: "\e330"; }
+.ph-fill.ph-pencil-simple:before { content: "\e3b4"; }
+.ph-fill.ph-plug:before { content: "\e946"; }
+.ph-fill.ph-plus:before { content: "\e3d4"; }
+.ph-fill.ph-pulse:before { content: "\e000"; }
+.ph-fill.ph-push-pin:before { content: "\e3e2"; }
+.ph-fill.ph-robot:before { content: "\e762"; }
+.ph-fill.ph-shield-check:before { content: "\e40c"; }
+.ph-fill.ph-sidebar-simple:before { content: "\ec24"; }
+.ph-fill.ph-spinner-gap:before { content: "\e66c"; }
+.ph-fill.ph-square:before { content: "\e45e"; }
+.ph-fill.ph-stack:before { content: "\e466"; }
+.ph-fill.ph-star-four:before { content: "\e6a4"; }
+.ph-fill.ph-stop:before { content: "\e46c"; }
+.ph-fill.ph-sun:before { content: "\e472"; }
+.ph-fill.ph-thermometer:before { content: "\e5c6"; }
+.ph-fill.ph-translate:before { content: "\e4a2"; }
+.ph-fill.ph-trash:before { content: "\e4a6"; }
+.ph-fill.ph-user:before { content: "\e4c2"; }
+.ph-fill.ph-user-circle:before { content: "\e4c4"; }
+.ph-fill.ph-waveform:before { content: "\e802"; }
+.ph-fill.ph-wrench:before { content: "\e5d4"; }
+.ph-fill.ph-x:before { content: "\e4f6"; }
+
+.ph-bold.ph-check:before { content: "\e182"; }
