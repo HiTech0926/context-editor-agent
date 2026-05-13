@@ -183,7 +183,7 @@ Cursor:     AI  →  编辑  →  代码
 | **前端** | React 19 + TypeScript + Vite | 开发快、类型安全、现代 DX |
 | **后端** | Python（子进程） | 零框架、极少依赖，由 Electron 自动管理生命周期 |
 | **LLM 运行时** | 自研 `agent_runtime` | Provider 无关的适配器层（OpenAI / Claude / Gemini） |
-| **存储** | 本地 JSON（用户数据目录） | 不需要数据库，数据完全在本地 |
+| **存储** | 本地 SQLite + JSON 设置（用户数据目录） | 单文件本地数据库，数据完全在本地 |
 | **流式传输** | Server-Sent Events (SSE) | 实时逐 token 流式推送 |
 
 ### 运行原理

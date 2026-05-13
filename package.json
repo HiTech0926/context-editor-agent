@@ -58,6 +58,7 @@
     "files": [
       "electron/**/*",
       "web_server.py",
+      "web_server_modules/**/*",
       "main.py",
       "requirements.txt",
       ".env.example",

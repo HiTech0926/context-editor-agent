@@ -124,18 +124,15 @@ function getMinimapBarHeightPx(role: MessageRecord['role'], weightClass: Context
 }
 
 function getContextNodeRoleName(role: MessageRecord['role']) {
-  if (role === 'an') {
-    return 'assistant';
-  }
   return role;
 }
 
 function getContextNodeClassName(role: MessageRecord['role']) {
-  return role === 'an' ? 'assistant' : role;
+  return role;
 }
 
 function isEditableContextNode(role: MessageRecord['role']) {
-  return role === 'user' || role === 'an';
+  return role === 'user' || role === 'assistant';
 }
 
 function buildRangeSelection(
@@ -173,7 +170,7 @@ function canExpandMessage(record: MessageRecord, previewText: string) {
   const hasMarkdownSyntax = /[#>*_\-`[\]()|]/.test(textValue);
   const isLongPlainText = normalizedText.length > 96;
 
-  if (record.role === 'an') {
+  if (record.role === 'assistant') {
     return Boolean(normalizedText || hasMultipleBlocks);
   }
 

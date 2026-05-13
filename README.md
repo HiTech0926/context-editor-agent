@@ -178,7 +178,7 @@ They never run in parallel on the same session. When the context model is editin
 | **Frontend** | React 19 + TypeScript + Vite | Fast dev, type safety, modern DX |
 | **Backend** | Python (child process) | Zero-framework, minimal deps, lifecycle managed by Electron |
 | **LLM Runtime** | Custom `agent_runtime` | Provider-agnostic adapter layer (OpenAI / Claude / Gemini) |
-| **Storage** | Local JSON (user data dir) | No database needed, data stays local |
+| **Storage** | Local SQLite + JSON settings (user data dir) | Single-file local database, data stays local |
 | **Streaming** | Server-Sent Events (SSE) | Real-time token streaming |
 
 ### How It Runs
@@ -204,7 +204,7 @@ They never run in parallel on the same session. When the context model is editin
     │ · Chat      │                    │ · Main Agent │
     │ · Ctx Map   │                    │ · Ctx Agent  │
     │ · Workbench │                    │ · State Mgr  │
-    │ · Settings  │                    │ · Local JSON │
+    │ · Settings  │                    │ · SQLite     │
     └─────────────┘                    └──────────────┘
 ```
 

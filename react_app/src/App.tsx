@@ -1538,7 +1538,7 @@ export default function App() {
 
       return {
         ...lastMessage,
-        role: 'an',
+        role: 'assistant',
         text: nextText,
         blocks: nextBlocks,
         pending: false,
@@ -2069,8 +2069,8 @@ export default function App() {
   }, [toastState.seq, toastState.visible]);
 
   useLayoutEffect(() => {
-    document.documentElement.style.setProperty('--an-theme', resolveThemeAccent(themeColor));
-    document.documentElement.style.setProperty('--an-theme-rgb', resolveThemeAccentRgb(themeColor));
+    document.documentElement.style.setProperty('--assistant-theme', resolveThemeAccent(themeColor));
+    document.documentElement.style.setProperty('--assistant-theme-rgb', resolveThemeAccentRgb(themeColor));
   }, [themeColor]);
 
   useEffect(() => {
@@ -2647,7 +2647,7 @@ export default function App() {
         sourceText: '',
       };
       const pendingMessage: MessageRecord = {
-        role: 'an',
+        role: 'assistant',
         text: '',
         attachments: [],
         toolEvents: [],
@@ -2689,7 +2689,7 @@ export default function App() {
           const nextText = getTextFromBlocks(nextBlocks) || response.answer || lastMessage.text;
 
           return {
-            role: 'an',
+            role: 'assistant',
             text: nextText,
             attachments: [],
             toolEvents: response.tool_events || lastMessage.toolEvents,
@@ -2736,7 +2736,7 @@ export default function App() {
             const isReasoningDelta = event.kind === 'reasoning';
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               text: isReasoningDelta ? lastMessage.text : `${lastMessage.text}${event.delta}`,
               blocks: isReasoningDelta
                 ? appendReasoningDeltaToBlocks(lastMessage.blocks, event.delta)
@@ -2749,7 +2749,7 @@ export default function App() {
           if (event.type === 'model_start') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               blocks: startThinkingBlock(lastMessage.blocks),
               pending: true,
             }));
@@ -2759,7 +2759,7 @@ export default function App() {
           if (event.type === 'model_done') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               blocks: completeReasoningBlocks(lastMessage.blocks),
               pending: true,
             }));
@@ -2769,7 +2769,7 @@ export default function App() {
           if (event.type === 'reasoning_start') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               blocks: startReasoningBlock(lastMessage.blocks),
               pending: true,
             }));
@@ -2779,7 +2779,7 @@ export default function App() {
           if (event.type === 'reasoning_done') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               blocks: completeReasoningBlocks(lastMessage.blocks),
               pending: true,
             }));
@@ -2789,7 +2789,7 @@ export default function App() {
           if (event.type === 'reset') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               pending: true,
             }));
             return;
@@ -2798,7 +2798,7 @@ export default function App() {
           if (event.type === 'tool_event') {
             updatePendingAssistantMessage(sessionId, (lastMessage) => ({
               ...lastMessage,
-              role: 'an',
+              role: 'assistant',
               toolEvents: [...lastMessage.toolEvents, event.tool_event],
               blocks: appendToolToBlocks(lastMessage.blocks, event.tool_event),
               pending: true,
@@ -2822,7 +2822,7 @@ export default function App() {
             const nextText = getTextFromBlocks(nextBlocks) || event.answer || lastMessage.text;
 
             return {
-              role: 'an',
+              role: 'assistant',
               text: nextText,
               attachments: [],
               toolEvents: event.tool_events || lastMessage.toolEvents,
@@ -2889,7 +2889,7 @@ export default function App() {
           const history = [...(previous[sessionId] || [])];
           if (history.length) {
             history[history.length - 1] = {
-              role: 'an',
+              role: 'assistant',
               text: getThrownMessage(error),
               attachments: [],
               toolEvents: [],

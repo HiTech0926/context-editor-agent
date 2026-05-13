@@ -93,7 +93,7 @@ export interface TranscriptRecord {
 }
 
 export interface MessageRecord {
-  role: 'user' | 'an' | 'system' | 'developer' | 'compaction' | 'context';
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'compaction' | 'context';
   text: string;
   attachments: AttachmentRecord[];
   toolEvents: ToolEvent[];

@@ -11,6 +11,7 @@ REACT_DIST_DIR = REPO_ROOT / "react_app" / "dist"
 RAW_STATE_DIR = Path(os.getenv("HASH_DATA_DIR", str(REPO_ROOT / "data"))).expanduser()
 STATE_DIR = RAW_STATE_DIR if RAW_STATE_DIR.is_absolute() else (REPO_ROOT / RAW_STATE_DIR).resolve()
 STATE_FILE = STATE_DIR / "hash_web_state.json"
+STATE_DB_FILE = STATE_DIR / "hash_web_state.sqlite3"
 CONTEXT_REQUEST_DEBUG_FILE = STATE_DIR / "context_request_debug.ndjson"
 ATTACHMENTS_DIR = STATE_DIR / "uploads"
 ATTACHMENTS_ROUTE = "uploads"

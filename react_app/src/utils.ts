@@ -97,11 +97,9 @@ export function normalizeConversation(records: TranscriptRecord[] = []): Message
 
   return records.map((record) => {
     const rawRole = String(record.role || '').trim();
-    const role: MessageRecord['role'] = rawRole === 'assistant'
-      ? 'an'
-      : (['system', 'developer', 'compaction', 'context'].includes(rawRole)
-        ? rawRole as MessageRecord['role']
-        : 'user');
+    const role: MessageRecord['role'] = ['assistant', 'system', 'developer', 'compaction', 'context'].includes(rawRole)
+      ? rawRole as MessageRecord['role']
+      : 'user';
     const text = String(record.text || '');
     const toolEvents = Array.isArray(record.toolEvents) ? record.toolEvents : [];
     const attachments = normalizeAttachments(record.attachments);
@@ -113,7 +111,7 @@ export function normalizeConversation(records: TranscriptRecord[] = []): Message
       toolEvents,
       blocks,
       pending: false,
-      sourceText: role === 'an' ? lastUserText : '',
+      sourceText: role === 'assistant' ? lastUserText : '',
     };
 
     if (role === 'user') {

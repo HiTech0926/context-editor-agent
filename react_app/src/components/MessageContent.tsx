@@ -384,7 +384,7 @@ export default function MessageContent({
   record,
   variant = 'default',
 }: MessageContentProps) {
-  const isAssistant = record.role === 'an';
+  const isAssistant = record.role === 'assistant';
 
   return (
     <>

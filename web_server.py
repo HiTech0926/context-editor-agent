@@ -40,10 +40,9 @@ from web_server_modules.paths import (
     ATTACHMENTS_DIR,
     ATTACHMENTS_ROUTE,
     CONTEXT_REQUEST_DEBUG_FILE,
-    RAW_STATE_DIR,
     REACT_DIST_DIR,
     REPO_ROOT,
-    STATE_DIR,
+    STATE_DB_FILE,
     STATE_FILE,
     attachment_url_path,
     is_relative_to_path,
@@ -62,6 +61,7 @@ from web_server_modules.providers import (
     normalize_provider_type,
 )
 from web_server_modules.serialization import sanitize_value
+from web_server_modules.state_store import SQLiteStateStore
 from web_server_modules.transcript import (
     ThinkTagStreamParser,
     append_tool_provider_items,
@@ -207,6 +207,7 @@ class AppState:
         self.projects: list[ProjectState] = []
         self.chat_session_ids: list[str] = []
         self.sessions: dict[str, SessionState] = {}
+        self.state_store = SQLiteStateStore(STATE_DB_FILE, legacy_json_file=STATE_FILE)
         self._load_state()
 
     def refresh_settings(self, settings: Settings) -> None:
@@ -837,12 +838,7 @@ class AppState:
         }
 
     def _load_state(self) -> None:
-        raw_state: dict[str, Any] = {}
-        if STATE_FILE.exists():
-            try:
-                raw_state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                raw_state = {}
+        raw_state = self.state_store.load_state()
 
         projects_data = raw_state.get("projects")
         if isinstance(projects_data, list):
@@ -975,7 +971,6 @@ class AppState:
                 owning_project.session_ids.append(session.session_id)
 
     def _save_state_locked(self) -> None:
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
             "projects": [
                 {
@@ -1001,10 +996,7 @@ class AppState:
                 for session_id, session in self.sessions.items()
             },
         }
-        STATE_FILE.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self.state_store.save_state(payload)
 
     def _ensure_default_project_locked(self) -> ProjectState:
         project = self._find_project_locked(DEFAULT_PROJECT_ID)
@@ -1411,6 +1403,7 @@ def write_context_request_debug(
             "created_at": utc_timestamp(),
             "pid": os.getpid(),
             "state_file": str(STATE_FILE),
+            "state_db_file": str(STATE_DB_FILE),
             "session_id": session_id,
             "model": request_model,
             "round_count": round_count,
